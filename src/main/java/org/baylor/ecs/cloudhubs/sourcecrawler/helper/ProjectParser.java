@@ -1,21 +1,29 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.helper;
 
+import lombok.Getter;
+import lombok.Value;
 import soot.ClassSource;
+import soot.Scene;
 import soot.SootClass;
 import soot.SourceLocator;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Value
 public class ProjectParser {
-    private SourceLocator srcLocator;
-    private List<SootClass> sootClasses;
+    @Getter
+    private final SourceLocator srcLocator;
+    @Getter
+    private final List<SootClass> sootClasses;
 
     public ProjectParser(String projectRoot) {
         super();
         srcLocator = SourceLocator.v();
+        Scene.v().setSootClassPath(projectRoot);
         var classes = srcLocator.getClassesUnder(projectRoot);
         var classSources = new ArrayList<ClassSource>();
+
         classes
             .parallelStream()
             .iterator()

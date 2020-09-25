@@ -1,8 +1,5 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.endpoint;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.Value;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
