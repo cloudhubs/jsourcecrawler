@@ -13,6 +13,7 @@ public class CFG {
     public CFG(SootMethod m) {
         method = m;
         cfg = new EnhancedBlockGraph(method.getActiveBody());
+//        cfg.iterator().next().getHead().
         // Note: it actually appears it is unnecessary to do any sort of wrapping
         // on this block graph due to the fact predecessors of blocks can
         // already be accessed.

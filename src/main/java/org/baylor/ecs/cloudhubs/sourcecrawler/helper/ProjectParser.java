@@ -11,8 +11,6 @@ public class ProjectParser {
     private SourceLocator srcLocator;
     private List<SootClass> sootClasses;
 
-    // TODO add lombok and switch to JUnit 5cC
-
     public ProjectParser(String projectRoot) {
         super();
         srcLocator = SourceLocator.v();
