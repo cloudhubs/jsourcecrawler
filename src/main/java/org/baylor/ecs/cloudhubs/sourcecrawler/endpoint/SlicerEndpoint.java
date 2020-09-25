@@ -1,5 +1,8 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.endpoint;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.Value;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
@@ -11,11 +14,15 @@ public class SlicerEndpoint {
     static class SliceRequest {
         @NonNull
         String projectRoot;
+
+        // Needed to fix 400 errors because of JSON deserialization
+        SliceRequest() {
+            projectRoot = "";
+        }
     }
 
     @PostMapping("/slicer")
     public String slicer(@RequestBody SliceRequest s) {
-        // TODO fix 400 bad response error.
         var parser = new ProjectParser(s.projectRoot);
 
         return ""; // TODO return actual response
