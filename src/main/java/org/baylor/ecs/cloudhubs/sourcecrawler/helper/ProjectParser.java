@@ -2,10 +2,7 @@ package org.baylor.ecs.cloudhubs.sourcecrawler.helper;
 
 import lombok.Getter;
 import lombok.Value;
-import soot.ClassSource;
-import soot.Scene;
-import soot.SootClass;
-import soot.SourceLocator;
+import soot.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +33,12 @@ public class ProjectParser {
             srcIter.next().resolve(sc);
             sootClasses.add(sc);
         }
+    }
+
+    public List<SootMethod> getMethods() {
+        var methods = new ArrayList<SootMethod>();
+        sootClasses.forEach((sc) -> methods.addAll(sc.getMethods()));
+        return methods;
     }
 
 }
