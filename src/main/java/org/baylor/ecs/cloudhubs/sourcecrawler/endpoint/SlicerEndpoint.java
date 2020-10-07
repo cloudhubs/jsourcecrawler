@@ -29,7 +29,7 @@ public class SlicerEndpoint {
     public String slicer(@RequestBody SliceRequest s) {
         ProjectParser parser = new ProjectParser(s.projectRoot);
         List<CFG> cfgs = new ArrayList<>();
-        parser.getMethods().forEach(m -> {
+        parser.getSootMethods().forEach(m -> {
             try {
                 cfgs.add(new CFG(m));
             } catch (RuntimeException e) {
