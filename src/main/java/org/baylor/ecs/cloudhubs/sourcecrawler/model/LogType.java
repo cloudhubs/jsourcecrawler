@@ -1,7 +1,12 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.model;
 
+import lombok.Getter;
+import lombok.Value;
+
+@Value
 public class LogType {
-    public String filePath;
-    public int lineNumber;
-    public String regex;
+    @Getter String filePath;
+    @Getter
+    int lineNumber;
+    @Getter String regex;
 }

@@ -2,13 +2,17 @@ package org.baylor.ecs.cloudhubs.sourcecrawler.helper;
 
 import lombok.Getter;
 import lombok.Value;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
 import soot.*;
+import soot.jimple.StringConstant;
+import soot.jimple.internal.ImmediateBox;
+import soot.jimple.internal.JAssignStmt;
+import soot.jimple.internal.JDynamicInvokeExpr;
+import soot.jimple.internal.JInvokeStmt;
 import soot.options.Options;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 public class ProjectParser {
@@ -18,6 +22,8 @@ public class ProjectParser {
     List<SootClass> sootClasses;
     @Getter
     List<SootMethod> sootMethods;
+    @Getter
+    List<LogType> logs;
 //        Scene.v().setSootClassPath(projectRoot);
 //        Options.v().set_whole_program(true);
 //        Options.v().set_prepend_classpath(true);
@@ -55,6 +61,69 @@ public class ProjectParser {
         sootMethods = new ArrayList<>();
         sootClasses.forEach(sc -> sootMethods.addAll(sc.getMethods()));
         sootMethods.forEach(SootMethod::retrieveActiveBody);
+    }
+
+    public List<LogType> findLogs() {
+        logs = sootMethods.stream()
+            .map(e -> findLogs(e.getActiveBody()))
+            .flatMap(Collection::stream)
+            .collect(Collectors.toList());
+        return logs;
+    }
+
+    private static List<LogType> findLogs(Body body) {
+        var units = body.getUnits()
+            .stream()
+            .map(Unit::getUnitBoxes)
+            .filter(Objects::nonNull)
+            .flatMap(Collection::stream)
+            .map(UnitBox::getUnit)
+            .collect(Collectors.toList());
+
+        List<LogType> logs = new ArrayList<>();
+
+        for (var unit : units) {
+            if (unit instanceof JInvokeStmt) {
+                var invoke = (JInvokeStmt)unit;
+                var expr = invoke.getInvokeExpr();
+                var ref = expr.getMethodRef();
+                var sig = ref.getSignature();
+                if (sig.contains("void log(org.apache.logging.log4j")) {
+                    var regex = findLogString(units, expr.getArgBox(1));
+                    var logType = new LogType(
+                        body.getMethod().getDeclaringClass().getFilePath(),
+                        unit.getJavaSourceStartLineNumber(),
+                        regex
+                    );
+                    logs.add(logType);
+                }
+            }
+        }
+
+        return logs;
+    }
+
+    private static String findLogString(List<Unit> units, ValueBox vb) {
+        var boxes = units.stream()
+            .filter(u -> u instanceof JAssignStmt)
+            .filter(u -> ((JAssignStmt)u).getLeftOpBox().equals(vb))
+            .collect(Collectors.toList());
+
+        var box = (JAssignStmt)boxes.get(boxes.size()-1);
+        var right = box.getRightOp();
+        if (right instanceof JDynamicInvokeExpr) {
+            var inv = (JDynamicInvokeExpr) right;
+            var arg = inv.getBootstrapArg(0);
+            if (arg instanceof ImmediateBox) {
+                var val = ((ImmediateBox)arg).getValue();
+                if (val instanceof StringConstant) {
+                    var str = ((StringConstant)val).value;
+                    return str.replaceAll(new String(new byte[] {1}), ".+");
+                }
+            }
+        }
+
+        return "";
     }
 
 }

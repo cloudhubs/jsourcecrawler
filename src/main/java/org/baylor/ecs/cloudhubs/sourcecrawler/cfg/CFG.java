@@ -1,7 +1,12 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.cfg;
 
 import soot.SootMethod;
+import soot.SootMethodRef;
+import soot.jimple.internal.JAssignStmt;
+import soot.jimple.internal.JStaticInvokeExpr;
 import soot.toolkits.graph.pdg.EnhancedBlockGraph;
+
+import java.util.HashMap;
 
 public class CFG {
     private SootMethod method;
@@ -14,6 +19,17 @@ public class CFG {
         var body = method.getActiveBody();
 
         cfg = new EnhancedBlockGraph(body);
+
+        cfg.getBody().getUnits().forEach(u -> {
+            if (u instanceof JAssignStmt) {
+                var right = ((JAssignStmt)u).getRightOpBox();
+                var value = right.getValue();
+                if (value instanceof JStaticInvokeExpr) {
+                   var method = ((JStaticInvokeExpr)value).getMethod().getActiveBody();
+//                   System.out.println("kek");
+                }
+            }
+        });
 
         // cfg.iterator().next().getHead().
         // Note: it actually appears it is unnecessary to do any sort of wrapping

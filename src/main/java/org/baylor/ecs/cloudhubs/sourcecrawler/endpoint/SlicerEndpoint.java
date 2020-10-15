@@ -29,6 +29,7 @@ public class SlicerEndpoint {
     public String slicer(@RequestBody SliceRequest s) {
         ProjectParser parser = new ProjectParser(s.projectRoot);
         List<CFG> cfgs = new ArrayList<>();
+        log.log(Level.WARN, "sample log: " + s.projectRoot + " -> " + cfgs);
         parser.getSootMethods().forEach(m -> {
             try {
                 cfgs.add(new CFG(m));
@@ -36,6 +37,8 @@ public class SlicerEndpoint {
                 log.log(Level.WARN, "Method had no body: " + m.toString() + " -> "+ e.getMessage());
             }
         });
+        var logs = parser.findLogs();
+        log.log(Level.INFO, "found logs: " + logs);
         return ""; // TODO return actual response
     }
 }
