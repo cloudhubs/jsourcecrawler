@@ -120,4 +120,28 @@ public class ProjectParser {
         return "";
     }
 
+    /**
+     * Returns methods in the order they appear in the stack trace. Index 0 is where the exception was thrown,
+     * and the last element is the entry point to the program.
+     */
+    public List<SootMethod> methodsInStackTrace(String stackTrace) {
+        var lines = stackTrace.split("\n");
+        var methodSignatures = Arrays.stream(lines)
+            .filter(line -> line.matches("^\\s+at .+$"))
+            .map(line -> line.split("^\\s+at ")[1])
+            .map(method -> method.split("\\(")[0])
+            .collect(Collectors.toList());
+
+        var methods = new ArrayList<SootMethod>();
+
+        for (var sig : methodSignatures) {
+            for (var method : sootMethods) {
+                if (method.getSignature().contains(sig)) {
+                    methods.add(method);
+                }
+            }
+        }
+
+        return methods;
+    }
 }
