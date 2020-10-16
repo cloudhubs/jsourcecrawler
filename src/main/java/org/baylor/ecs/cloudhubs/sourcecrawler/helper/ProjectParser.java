@@ -138,6 +138,7 @@ public class ProjectParser {
             for (var method : sootMethods) {
                 if (method.getSignature().contains(sig)) {
                     methods.add(method);
+                    break;
                 }
             }
         }

@@ -1,5 +1,7 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.endpoint;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.Value;
 import lombok.extern.log4j.Log4j2;
@@ -19,9 +21,13 @@ public class SlicerEndpoint {
         @NonNull
         String projectRoot;
 
+        @NonNull
+        String stackTrace;
+
         // Needed to fix 400 errors because of JSON deserialization
         SliceRequest() {
             projectRoot = "";
+            stackTrace = "";
         }
     }
 
@@ -30,7 +36,7 @@ public class SlicerEndpoint {
         ProjectParser parser = new ProjectParser(s.projectRoot);
         List<CFG> cfgs = new ArrayList<>();
         log.log(Level.WARN, "sample log: " + s.projectRoot + " -> " + cfgs);
-        parser.getSootMethods().forEach(m -> {
+        parser.methodsInStackTrace(s.stackTrace).forEach(m -> {
             try {
                 cfgs.add(new CFG(m));
             } catch (RuntimeException e) {
