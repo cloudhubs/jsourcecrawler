@@ -1,7 +1,6 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.helper;
 
 import lombok.Getter;
-import lombok.Value;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
 import soot.*;
 import soot.jimple.StringConstant;
@@ -74,10 +73,7 @@ public class ProjectParser {
     private static List<LogType> findLogs(Body body) {
         var units = body.getUnits()
             .stream()
-            .map(Unit::getUnitBoxes)
             .filter(Objects::nonNull)
-            .flatMap(Collection::stream)
-            .map(UnitBox::getUnit)
             .collect(Collectors.toList());
 
         List<LogType> logs = new ArrayList<>();
@@ -89,7 +85,7 @@ public class ProjectParser {
                 var ref = expr.getMethodRef();
                 var sig = ref.getSignature();
                 if (sig.contains("void log(org.apache.logging.log4j")) {
-                    var regex = findLogString(units, expr.getArgBox(1));
+                    var regex = findLogString(units, expr.getArg(1));
                     var logType = new LogType(
                         body.getMethod().getDeclaringClass().getFilePath(),
                         unit.getJavaSourceStartLineNumber(),
@@ -103,23 +99,20 @@ public class ProjectParser {
         return logs;
     }
 
-    private static String findLogString(List<Unit> units, ValueBox vb) {
-        var boxes = units.stream()
+    private static String findLogString(List<Unit> units, Value vb) {
+        var values = units.stream()
             .filter(u -> u instanceof JAssignStmt)
-            .filter(u -> ((JAssignStmt)u).getLeftOpBox().equals(vb))
+            .filter(u -> ((JAssignStmt)u).getLeftOp() == vb)
             .collect(Collectors.toList());
 
-        var box = (JAssignStmt)boxes.get(boxes.size()-1);
+        var box = (JAssignStmt)values.get(values.size()-1);
         var right = box.getRightOp();
         if (right instanceof JDynamicInvokeExpr) {
             var inv = (JDynamicInvokeExpr) right;
             var arg = inv.getBootstrapArg(0);
-            if (arg instanceof ImmediateBox) {
-                var val = ((ImmediateBox)arg).getValue();
-                if (val instanceof StringConstant) {
-                    var str = ((StringConstant)val).value;
-                    return str.replaceAll(new String(new byte[] {1}), ".+");
-                }
+            if (arg instanceof StringConstant) {
+                var str = ((StringConstant)arg).value;
+                return str.replaceAll(new String(new byte[] {1}), ".+");
             }
         }
 
