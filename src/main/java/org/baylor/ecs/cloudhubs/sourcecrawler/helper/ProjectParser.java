@@ -88,7 +88,8 @@ public class ProjectParser {
                     var regex = findLogString(units, expr.getArg(1));
                     var logType = new LogType(
                         body.getMethod().getDeclaringClass().getFilePath(),
-                        unit.getJavaSourceStartLineNumber(),
+                        body.getMethod().getSignature(),
+//                        unit.getJavaSourceStartLineNumber(),
                         regex
                     );
                     logs.add(logType);
