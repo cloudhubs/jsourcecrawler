@@ -84,16 +84,26 @@ public class ProjectParser {
                 var expr = invoke.getInvokeExpr();
                 var ref = expr.getMethodRef();
                 var sig = ref.getSignature();
+                var index = -1;
                 if (sig.contains("void log(org.apache.logging.log4j")) {
-                    var regex = findLogString(units, expr.getArg(1));
-                    var logType = new LogType(
-                        body.getMethod().getDeclaringClass().getFilePath(),
-                        body.getMethod().getSignature(),
-//                        unit.getJavaSourceStartLineNumber(),
-                        regex
-                    );
-                    logs.add(logType);
+                    index = 1;
+                } else if (sig.contains("java.util.logging.Logger: void log(")) {
+                    index = 1;
+                } else if (sig.contains("java.util.logging.Logger")) {
+                    index = 0;
                 }
+                // Method invalid, continue to next iteration
+                if (index < 0) {
+                    continue;
+                }
+                var regex = findLogString(units, expr.getArg(index));
+                var logType = new LogType(
+                    body.getMethod().getDeclaringClass().getFilePath(),
+                    body.getMethod().getSignature(),
+//                        unit.getJavaSourceStartLineNumber(),
+                    regex
+                );
+                logs.add(logType);
             }
         }
 
@@ -101,6 +111,13 @@ public class ProjectParser {
     }
 
     private static String findLogString(List<Unit> units, Value vb) {
+        // Handle java util info(), warn(), etc
+        if (vb instanceof StringConstant) {
+            var str = ((StringConstant)vb).value;
+            return str.replaceAll(new String(new byte[] {1}), ".+");
+        }
+
+        // Handle java util and log4j log()
         var values = units.stream()
             .filter(u -> u instanceof JAssignStmt)
             .filter(u -> ((JAssignStmt)u).getLeftOp() == vb)
@@ -117,7 +134,7 @@ public class ProjectParser {
             }
         }
 
-        return "";
+        return ".+";
     }
 
     /**
@@ -135,8 +152,12 @@ public class ProjectParser {
         var methods = new ArrayList<SootMethod>();
 
         for (var sig : methodSignatures) {
+            var lastDot = sig.lastIndexOf('.');
+            var clazz = sig.substring(0, lastDot);
+            var call = sig.substring(lastDot + 1) + "(";
             for (var method : sootMethods) {
-                if (method.getSignature().contains(sig)) {
+                var msig = method.getSignature();
+                if (msig.contains(clazz) && msig.contains(call)) {
                     methods.add(method);
                     break;
                 }

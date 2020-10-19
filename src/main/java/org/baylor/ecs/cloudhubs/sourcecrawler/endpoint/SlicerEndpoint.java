@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Log4j2
 @RestController
@@ -36,7 +37,8 @@ public class SlicerEndpoint {
         ProjectParser parser = new ProjectParser(s.projectRoot);
         List<CFG> cfgs = new ArrayList<>();
         log.log(Level.WARN, "sample log: " + s.projectRoot + " -> " + cfgs);
-        parser.methodsInStackTrace(s.stackTrace).forEach(m -> {
+        log.log(Level.INFO, "stackTrace:\n" + s.stackTrace);
+        parser.getSootMethods().forEach(m -> {
             try {
                 cfgs.add(new CFG(m));
             } catch (RuntimeException e) {
@@ -45,6 +47,23 @@ public class SlicerEndpoint {
         });
         var logs = parser.findLogs();
         log.log(Level.INFO, "found logs: " + logs);
+
+        var stack = parser.methodsInStackTrace(s.stackTrace);
+        if (stack.size() < 1) {
+            log.log(Level.WARN, "no methods in stack trace");
+            return "";
+        }
+
+        var entryMethod = stack.get(stack.size()-1);
+        var cfg = cfgs.stream().filter(c -> c.getMethod() == entryMethod).collect(Collectors.toList());
+        if (cfg.size() < 1) {
+            log.log(Level.WARN, "couldn't find entry method");
+            return "";
+        }
+        var entry = cfg.get(0);
+
+        entry.connectCFGs(cfgs);
+
         return ""; // TODO return actual response
     }
 }
