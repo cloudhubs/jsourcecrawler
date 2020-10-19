@@ -51,9 +51,16 @@ public class CFG {
         for (var it : unitIters) {
             it.forEachRemaining(unit -> {
                 var callee = findUnitCallee(unit, methods);
-                callee.ifPresent(c -> callSiteToCFG.put(unit, c.copyWrapper(this, unit)));
+                callee.ifPresent(c -> {
+                    // Prevent infinite recursive expansion (don't expand recursive calls)
+                    if (!c.getMethod().getSignature().equals(method.getSignature())) {
+                        callSiteToCFG.put(unit, c.copyWrapper(this, unit));
+                    }
+                });
             });
         }
+        // Recursively expand CFGs
+        callSiteToCFG.forEach((call, cfg) -> cfg.connectCFGs(methods));
     }
 
     private static Optional<CFG> findUnitCallee(Unit unit, List<CFG> methods) {
@@ -75,7 +82,10 @@ public class CFG {
     private static Optional<CFG> findCalleeCFG(AbstractInvokeExpr invokeExpr, List<CFG> methods) {
         var method = invokeExpr.getMethod();
         var m = methods.stream()
-            .filter(cfg -> cfg.cfg.getBody().getMethod() == method)
+            .filter(cfg -> {
+                var met = cfg.getMethod();
+                return met.getSignature().equals(method.getSignature());
+            })
             .collect(Collectors.toList());
         if (m.size() > 0) {
             return Optional.of(m.get(0));
