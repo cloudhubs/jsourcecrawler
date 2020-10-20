@@ -55,7 +55,7 @@ public class SlicerEndpoint {
         }
 
         var entryMethod = stack.get(stack.size()-1);
-        var cfg = cfgs.stream().filter(c -> c.getMethod() == entryMethod).collect(Collectors.toList());
+        var cfg = cfgs.stream().filter(c -> c.getMethod() == entryMethod.getMethod()).collect(Collectors.toList());
         if (cfg.size() < 1) {
             log.log(Level.WARN, "couldn't find entry method");
             return "";
@@ -63,6 +63,12 @@ public class SlicerEndpoint {
         var entry = cfg.get(0);
 
         entry.connectCFGs(cfgs);
+
+        var unitAndCFG = entry.findThrowUnitAndCFG(stack);
+
+//        entry.getMethod().getActiveBody().getUnits().stream().iterator().forEachRemaining(u -> {
+//            log.log(Level.INFO, "line: " + u.getJavaSourceStartLineNumber() + " col:" + u.getJavaSourceStartColumnNumber());
+//        });
 
         return ""; // TODO return actual response
     }
