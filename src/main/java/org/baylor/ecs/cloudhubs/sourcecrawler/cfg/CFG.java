@@ -113,20 +113,16 @@ public class CFG {
     }
 
     private boolean callSiteIsStackTraceCall(Unit unit, List<StackTraceMethod> trace) {
-        // Get the CFG For the callee
-        var callee = callSiteToCFG.get(unit);
-
-        // Find the method in the stack trace
+        // Find the call(s) of the current method in the stack trace
         var methods = trace.stream()
-            .filter(stm -> stm.getMethod().getSignature().equals(callee.getMethod().getSignature()))
-            .collect(Collectors.toList())
-            .iterator();
+            .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
+            .collect(Collectors.toList());
 
-        if (methods.hasNext()) {
-            var stackTraceMethod = methods.next();
-
-            // Verify the line number is the same for this call site
-            return stackTraceMethod.getLine() == unit.getJavaSourceStartLineNumber();
+        // Find a call where the exception line matches the Unit method call line
+        for (var stackMethod : methods) {
+            if (stackMethod.getLine() == unit.getJavaSourceStartLineNumber()) {
+                return true;
+            }
         }
         return false;
     }
@@ -167,26 +163,6 @@ public class CFG {
         return Optional.empty();
     }
 }
-
-
-//        cfg.getBody().getUnits().forEach(u -> {
-//            if (u instanceof JAssignStmt) {
-//                var right = ((JAssignStmt)u).getRightOpBox();
-//                var value = right.getValue();
-//                if (value instanceof JStaticInvokeExpr) {
-//                   var method = ((JStaticInvokeExpr)value).getMethod().getActiveBody();
-////                   System.out.println("kek");
-//                }
-//            }
-//        });
-
-// cfg.iterator().next().getHead().
-// Note: it actually appears it is unnecessary to do any sort of wrapping
-// on this block graph due to the fact predecessors of blocks can
-// already be accessed.
-// It also appears I do not need to directly in-line function calls as
-// part of the work is already done with InvokeStmt -> InvokeExpr -> SootMethod.
-// I can simply get the SootMethod back and keep a Flyweight/cache of CFGs.
 
 // I discovered the CallGraph class exists but only after I connected the CFGs. This maybe could have
 // been used for parent stuff but may be useful for telling whether a Unit is an outgoing edge or not.
