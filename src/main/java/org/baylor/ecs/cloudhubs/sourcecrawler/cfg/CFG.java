@@ -138,26 +138,26 @@ public class CFG {
         if (exception.isPresent()) {
             // Find the method in the stack trace
             var methods = trace.stream()
-                .filter(stm -> stm.getMethod().getSignature().equals(method.getSignature()))
-                .collect(Collectors.toList())
-                .iterator();
+                .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
+                .collect(Collectors.toList());
 
-            if (methods.hasNext()) {
-                var stackTraceMethod = methods.next();
-
+            for (var stackMethod : methods) {
                 // Verify the line number is the same for this call site
-                return stackTraceMethod.getLine() == throwStmt.getJavaSourceStartLineNumber();
+                if (stackMethod.getLine() == throwStmt.getJavaSourceStartLineNumber()) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
     private static Optional<String> findExceptionType(Block block, Unit u) {
-        var pred = block.getPredOf(u);
-        if (pred instanceof JAssignStmt) {
-            var right = ((JAssignStmt)pred).getRightOp();
-            if (right instanceof JNewExpr) {
-                return Optional.of(right.toString().split("\\s")[1]);
+        for (var pred = block.getPredOf(u); pred != null; pred = block.getPredOf(pred)) {
+            if (pred instanceof JAssignStmt) {
+                var right = ((JAssignStmt)pred).getRightOp();
+                if (right instanceof JNewExpr) {
+                    return Optional.of(right.toString().split("\\s")[1]);
+                }
             }
         }
         return Optional.empty();
