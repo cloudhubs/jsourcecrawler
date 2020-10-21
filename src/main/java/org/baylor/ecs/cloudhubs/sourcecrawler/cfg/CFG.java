@@ -1,12 +1,13 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.cfg;
 
+import jas.Pair;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import org.baylor.ecs.cloudhubs.sourcecrawler.helper.StackTraceMethod;
+import soot.Scene;
 import soot.SootMethod;
 import soot.Unit;
-import soot.jimple.internal.AbstractInvokeExpr;
-import soot.jimple.internal.JAssignStmt;
-import soot.jimple.internal.JInvokeStmt;
+import soot.jimple.internal.*;
 import soot.toolkits.graph.Block;
 import soot.toolkits.graph.CompleteBlockGraph;
 import java.util.HashMap;
@@ -17,15 +18,15 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class CFG {
     @Getter
-    private SootMethod method;
-    private CompleteBlockGraph cfg;
+    protected SootMethod method;
+    protected CompleteBlockGraph cfg;
 
     enum Label { Must, May, MustNot };
-    private HashMap<Block, Label> labels;
+    protected HashMap<Block, Label> labels;
 
-    private HashMap<Unit, CFG> callSiteToCFG;
-    private Optional<CFG> pred;
-    private Optional<Unit> callSite;
+    protected HashMap<Unit, CFG> callSiteToCFG;
+    protected Optional<CFG> pred;
+    protected Optional<Unit> callSite;
 
     public CFG(SootMethod m) throws RuntimeException {
         method = m;
@@ -92,24 +93,80 @@ public class CFG {
         }
         return Optional.empty();
     }
+
+    public Pair<CFG, Unit> findThrowUnitAndCFG(List<StackTraceMethod> trace) {
+        for (var block : cfg.getBlocks()) {
+            for (var unit : block) {
+                if (callSiteToCFG.containsKey(unit) && callSiteIsStackTraceCall(unit, trace)) {
+                    // Get the CFG For the callee
+                    var callee = callSiteToCFG.get(unit);
+
+                    // Found a block that must have executed since a stack trace method call was found.
+                    labels.put(block, Label.Must);
+                    return callee.findThrowUnitAndCFG(trace);
+                } else if (unit instanceof JThrowStmt && exceptionMatches(block, (JThrowStmt)unit, trace)) {
+                    return new Pair<>(this, unit);
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean callSiteIsStackTraceCall(Unit unit, List<StackTraceMethod> trace) {
+        // Find the call(s) of the current method in the stack trace
+        var methods = trace.stream()
+            .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
+            .collect(Collectors.toList());
+
+        // Find a call where the exception line matches the Unit method call line
+        for (var stackMethod : methods) {
+            if (stackMethod.getLine() == unit.getJavaSourceStartLineNumber()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks whether the `JThrowStmt` given has the same line number as the one in the stack trace, and it is
+     * thrown from the same method.
+     *
+     * @return whether the exception matched or not
+     */
+    private boolean exceptionMatches(Block block, JThrowStmt throwStmt, List<StackTraceMethod> trace) {
+        var exception = findExceptionType(block, throwStmt);
+        if (exception.isPresent()) {
+            // Find the method in the stack trace
+            var methods = trace.stream()
+                .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
+                .collect(Collectors.toList());
+
+            for (var stackMethod : methods) {
+                // Verify the line number is the same for this call site
+                if (stackMethod.getLine() == throwStmt.getJavaSourceStartLineNumber()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Optional<String> findExceptionType(Block block, Unit u) {
+        for (var pred = block.getPredOf(u); pred != null; pred = block.getPredOf(pred)) {
+            if (pred instanceof JAssignStmt) {
+                var right = ((JAssignStmt)pred).getRightOp();
+                if (right instanceof JNewExpr) {
+                    return Optional.of(right.toString().split("\\s")[1]);
+                }
+            }
+        }
+        return Optional.empty();
+    }
 }
 
-
-//        cfg.getBody().getUnits().forEach(u -> {
-//            if (u instanceof JAssignStmt) {
-//                var right = ((JAssignStmt)u).getRightOpBox();
-//                var value = right.getValue();
-//                if (value instanceof JStaticInvokeExpr) {
-//                   var method = ((JStaticInvokeExpr)value).getMethod().getActiveBody();
-////                   System.out.println("kek");
-//                }
-//            }
-//        });
-
-// cfg.iterator().next().getHead().
-// Note: it actually appears it is unnecessary to do any sort of wrapping
-// on this block graph due to the fact predecessors of blocks can
-// already be accessed.
-// It also appears I do not need to directly in-line function calls as
-// part of the work is already done with InvokeStmt -> InvokeExpr -> SootMethod.
-// I can simply get the SootMethod back and keep a Flyweight/cache of CFGs.
+// I discovered the CallGraph class exists but only after I connected the CFGs. This maybe could have
+// been used for parent stuff but may be useful for telling whether a Unit is an outgoing edge or not.
+//        var callsites = Scene.v().getCallGraph().edgesInto(method);
+//        var edge = callsites.next(); // iterator over all callers
+//        edge.getSrc().method(); // SootMethod
+//        edge.srcUnit(); // Unit

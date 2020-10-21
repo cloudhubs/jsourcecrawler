@@ -14,6 +14,8 @@ import java.util.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
+import static java.lang.Integer.parseInt;
+
 public class ProjectParser {
     @Getter
     SourceLocator srcLocator;
@@ -37,8 +39,12 @@ public class ProjectParser {
         String[] dirs = {projectRoot};
         Options.v().set_whole_program(true);
         Options.v().set_allow_phantom_refs(true);
+        Options.v().set_keep_line_number(true);
         Options.v().set_process_dir(Arrays.stream(dirs).collect(Collectors.toList()));
         Options.v().setPhaseOption("jb", "use-original-names:true");
+        Options.v().setPhaseOption("jb", "preserve-source-annotations:true");
+//        Scene.v().getCallGraph()
+
         Scene.v().loadNecessaryClasses();
         List<String> classes = srcLocator.getClassesUnder(projectRoot);
         List<ClassSource> classSources = new ArrayList<>();
@@ -141,24 +147,37 @@ public class ProjectParser {
      * Returns methods in the order they appear in the stack trace. Index 0 is where the exception was thrown,
      * and the last element is the entry point to the program.
      */
-    public List<SootMethod> methodsInStackTrace(String stackTrace) {
+    public List<StackTraceMethod> methodsInStackTrace(String stackTrace) {
         var lines = stackTrace.split("\n");
-        var methodSignatures = Arrays.stream(lines)
+
+        var exceptionLine = stackTrace.split("\n")[0].split(":")[0].split("\\s");
+        var exception = exceptionLine[exceptionLine.length-1];
+
+        var methodLines = Arrays.stream(lines)
             .filter(line -> line.matches("^\\s+at .+$"))
             .map(line -> line.split("^\\s+at ")[1])
+            .collect(Collectors.toList());
+
+        var methodSignatures = methodLines.stream()
             .map(method -> method.split("\\(")[0])
             .collect(Collectors.toList());
 
-        var methods = new ArrayList<SootMethod>();
+        var lineNumbers = methodLines.stream()
+            .map(method -> parseInt(method.split("\\(.+:")[1].split("\\)")[0]))
+            .collect(Collectors.toList())
+            .iterator();
+
+        var methods = new ArrayList<StackTraceMethod>();
 
         for (var sig : methodSignatures) {
+            var line = lineNumbers.next();
             var lastDot = sig.lastIndexOf('.');
             var clazz = sig.substring(0, lastDot);
             var call = sig.substring(lastDot + 1) + "(";
             for (var method : sootMethods) {
                 var msig = method.getSignature();
                 if (msig.contains(clazz) && msig.contains(call)) {
-                    methods.add(method);
+                    methods.add(new StackTraceMethod(method, line, exception));
                     break;
                 }
             }
