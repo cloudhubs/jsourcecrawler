@@ -7,5 +7,6 @@ import lombok.Value;
 public class LogType {
     @Getter String filePath;
     @Getter String methodSignature;
+    @Getter int line;
     @Getter String regex;
 }

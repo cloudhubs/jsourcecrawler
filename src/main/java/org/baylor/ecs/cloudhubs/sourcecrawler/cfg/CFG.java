@@ -3,6 +3,8 @@ package org.baylor.ecs.cloudhubs.sourcecrawler.cfg;
 import jas.Pair;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
+import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.StackTraceMethod;
 import soot.Scene;
 import soot.SootMethod;
@@ -10,6 +12,8 @@ import soot.Unit;
 import soot.jimple.internal.*;
 import soot.toolkits.graph.Block;
 import soot.toolkits.graph.CompleteBlockGraph;
+
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -161,6 +165,102 @@ public class CFG {
             }
         }
         return Optional.empty();
+    }
+
+    // CFG Labeling stuff
+
+    private Optional<Block> findBlockContainingUnit(Unit u) {
+        for (var block : cfg.getBlocks()) {
+            for (var unit : block) {
+                if (unit.equals(u)) {
+                    return Optional.of(block);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    // Unit is either the exception line or a call site in the stack trace
+    public void beginLabelingAt(Unit unit, LogParser logParser) {
+        var b = findBlockContainingUnit(unit);
+        if (b.isEmpty()) {
+            return;
+        }
+        labelBlockRecur(b.get(), logParser);
+    }
+
+    // TODO: Label inside of any method calls in these blocks.
+    private void labelBlockRecur(Block block, LogParser logParser) {
+        var preds = block.getPreds();
+
+        for (var pred : preds) {
+            var predLabel = labels.get(pred);
+            if (predLabel == null) {
+                // If a printed log statement is here, label must
+                if (blockContainsPrintedLog(pred, logParser)) {
+                    labels.put(block, Label.Must);
+                }
+
+                // If one of its children is must, pred is must
+                if (anySuccOfBlockEquals(pred, Label.Must)) {
+                    var mustSucc = block.getSuccs()
+                        .stream()
+                        .filter(s -> labels.get(s).equals(Label.Must))
+                        .iterator()
+                        .next();
+
+                    if (mustSucc.getPreds().size() == 1) {
+                        labels.put(pred, Label.Must);
+                        labelMaybeSuccsAsMustNot(pred);
+                    } else {
+                        labels.put(pred, Label.May);
+                    }
+                } else if (allSuccOfBlockEquals(pred, Label.May)) {
+                    labels.put(pred, Label.May);
+                } else if (allSuccOfBlockEquals(pred, Label.MustNot)) {
+                    labels.put(pred, Label.MustNot);
+                }
+            }
+            labelBlockRecur(pred, logParser);
+        }
+        // Recurse to the next method up in the stack trace
+        if (preds.size() < 1 && pred.isPresent() && callSite.isPresent()) {
+            pred.get().beginLabelingAt(callSite.get(), logParser);
+        }
+    }
+
+    private boolean anySuccOfBlockEquals(Block block, Label label) {
+        return block.getSuccs()
+            .stream()
+            .anyMatch(succ -> labels.get(succ).equals(label));
+    }
+
+    private boolean allSuccOfBlockEquals(Block block, Label label) {
+        return block.getSuccs()
+            .stream()
+            .allMatch(succ -> labels.get(succ).equals(label));
+    }
+
+    private boolean blockContainsPrintedLog(Block block, LogParser logParser) {
+        List<Unit> units = new ArrayList<>();
+        block.iterator().forEachRemaining(units::add);
+        var filePath = block.getBody().getMethod().getDeclaringClass().getFilePath();
+        var signature = block.getBody().getMethod().getSignature();
+        var logs = ProjectParser.findLogs(units, filePath, signature);
+        return logs
+            .stream()
+            .anyMatch(logParser::wasLogExecuted);
+    }
+
+    // I think this is fine since the call site will always be must, no need for continuing to next call I think
+    private void labelMaybeSuccsAsMustNot(Block block) {
+        var label = labels.get(block);
+        if (label != Label.Must) {
+            labels.put(block, Label.MustNot);
+            for (var succ : block.getSuccs()) {
+                labelMaybeSuccsAsMustNot(succ);
+            }
+        }
     }
 }
 

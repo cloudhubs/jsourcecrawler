@@ -76,12 +76,17 @@ public class ProjectParser {
         return logs;
     }
 
-    private static List<LogType> findLogs(Body body) {
+    public static List<LogType> findLogs(Body body) {
         var units = body.getUnits()
             .stream()
             .filter(Objects::nonNull)
             .collect(Collectors.toList());
 
+        return findLogs(units, body.getMethod().getDeclaringClass().getFilePath(),
+            body.getMethod().getSignature());
+    }
+
+    public static List<LogType> findLogs(List<Unit> units, String filePath, String signature) {
         List<LogType> logs = new ArrayList<>();
 
         for (var unit : units) {
@@ -104,15 +109,14 @@ public class ProjectParser {
                 }
                 var regex = findLogString(units, expr.getArg(index));
                 var logType = new LogType(
-                    body.getMethod().getDeclaringClass().getFilePath(),
-                    body.getMethod().getSignature(),
-//                        unit.getJavaSourceStartLineNumber(),
+                    filePath,
+                    signature,
+                    unit.getJavaSourceStartLineNumber(),
                     regex
                 );
                 logs.add(logType);
             }
         }
-
         return logs;
     }
 
