@@ -7,6 +7,7 @@ import org.baylor.ecs.cloudhubs.sourcecrawler.cfg.CFG;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
 import org.springframework.web.bind.annotation.*;
+import soot.jimple.ConditionExpr;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -35,8 +36,14 @@ public class SlicerEndpoint {
         }
     }
 
+    @Value
+    @AllArgsConstructor
+    static class SliceResponse {
+        List<List<String>> paths;
+    }
+
     @PostMapping("/slicer")
-    public String slicer(@RequestBody SliceRequest s) {
+    public SliceResponse slicer(@RequestBody SliceRequest s) {
         ProjectParser parser = new ProjectParser(s.projectRoot);
         List<CFG> cfgs = new ArrayList<>();
         log.log(Level.WARN, "sample log: " + s.projectRoot + " -> " + cfgs);
@@ -54,14 +61,14 @@ public class SlicerEndpoint {
         var stack = parser.methodsInStackTrace(s.stackTrace);
         if (stack.size() < 1) {
             log.log(Level.WARN, "no methods in stack trace");
-            return "";
+            return null;
         }
 
         var entryMethod = stack.get(stack.size()-1);
         var cfg = cfgs.stream().filter(c -> c.getMethod() == entryMethod.getMethod()).collect(Collectors.toList());
         if (cfg.size() < 1) {
             log.log(Level.WARN, "couldn't find entry method");
-            return "";
+            return null;
         }
         var entry = cfg.get(0);
 
@@ -73,10 +80,22 @@ public class SlicerEndpoint {
         var exceptionLoc = unitAndCFG.getO2();
         rootCause.beginLabelingAt(exceptionLoc, logParser);
 
-//        entry.getMethod().getActiveBody().getUnits().stream().iterator().forEachRemaining(u -> {
-//            log.log(Level.INFO, "line: " + u.getJavaSourceStartLineNumber() + " col:" + u.getJavaSourceStartColumnNumber());
-//        });
+        var paths = new ArrayList<ArrayList<ConditionExpr>>();
+        var path = new ArrayList<ConditionExpr>();
+        var exceptBlock = rootCause.findBlockContainingUnit(exceptionLoc);
+        exceptBlock.ifPresent(except -> {
+            rootCause.collectPaths(except, paths, path, null);
+        });
 
-        return ""; // TODO return actual response
+        var pathsStr = paths
+            .stream()
+            .map(execPath -> execPath
+                .stream()
+                .map(Object::toString)
+                .collect(Collectors.toList()))
+            .collect(Collectors.toList());
+
+        var resp = new SliceResponse(pathsStr);
+        return resp;
     }
 }

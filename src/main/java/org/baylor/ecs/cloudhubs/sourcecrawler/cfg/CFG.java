@@ -6,9 +6,11 @@ import lombok.Getter;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.StackTraceMethod;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
 import soot.Scene;
 import soot.SootMethod;
 import soot.Unit;
+import soot.jimple.ConditionExpr;
 import soot.jimple.internal.*;
 import soot.toolkits.graph.Block;
 import soot.toolkits.graph.CompleteBlockGraph;
@@ -169,7 +171,7 @@ public class CFG {
 
     // CFG Labeling stuff
 
-    private Optional<Block> findBlockContainingUnit(Unit u) {
+    public Optional<Block> findBlockContainingUnit(Unit u) {
         for (var block : cfg.getBlocks()) {
             for (var unit : block) {
                 if (unit.equals(u)) {
@@ -197,6 +199,10 @@ public class CFG {
         for (var unit : block) {
             if (callSiteToCFG.containsKey(unit)) {
                 var cfg = callSiteToCFG.get(unit);
+                var heads = cfg.cfg.getHeads();
+                if (heads.size() == 1) {
+                    cfg.labels.put(heads.get(0), Label.Must);
+                }
                 var tails = cfg.cfg.getTails();
                 for (var tail : tails) {
                     labelBlockRecur(tail, logParser);
@@ -205,18 +211,19 @@ public class CFG {
         }
 
         for (var pred : preds) {
+            // If a printed log statement is here, label must
+            if (blockContainsPrintedLog(pred, logParser)) {
+                labels.put(pred, Label.Must);
+            } else if (blockContainsNotPrintedLog(pred, logParser)) {
+                labels.put(pred, Label.MustNot);
+            }
             var predLabel = labels.get(pred);
             if (predLabel == null) {
-                // If a printed log statement is here, label must
-                if (blockContainsPrintedLog(pred, logParser)) {
-                    labels.put(pred, Label.Must);
-                }
-
                 // If one of its children is must, pred is must
                 if (anySuccOfBlockEquals(pred, Label.Must)) {
                     var mustSucc = pred.getSuccs()
                         .stream()
-                        .filter(s -> labels.get(s).equals(Label.Must))
+                        .filter(s -> labels.containsKey(s) && labels.get(s).equals(Label.Must))
                         .iterator()
                         .next();
 
@@ -229,9 +236,18 @@ public class CFG {
                     }
                 } else if (allSuccOfBlockEquals(pred, Label.May)) {
                     labels.put(pred, Label.May);
+//                    var currLabel = labels.get(pred);
+//                    if (currLabel == Label.MustNot) {
+//                        labelSuccsAs(pred, Label.MustNot);
+//                    } else {
+//
+//                    }
+
                 } else if (allSuccOfBlockEquals(pred, Label.MustNot)) {
                     labels.put(pred, Label.MustNot);
                 }
+            } else if (predLabel == Label.May) {
+
             }
             labelBlockRecur(pred, logParser);
         }
@@ -254,15 +270,24 @@ public class CFG {
             .allMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
     }
 
-    private boolean blockContainsPrintedLog(Block block, LogParser logParser) {
+    private List<LogType> getLogsInBlock(Block block) {
         List<Unit> units = new ArrayList<>();
         block.iterator().forEachRemaining(units::add);
         var filePath = block.getBody().getMethod().getDeclaringClass().getFilePath();
         var signature = block.getBody().getMethod().getSignature();
-        var logs = ProjectParser.findLogs(units, filePath, signature);
-        return logs
+        return ProjectParser.findLogs(units, filePath, signature);
+    }
+
+    private boolean blockContainsPrintedLog(Block block, LogParser logParser) {
+        return getLogsInBlock(block)
             .stream()
             .anyMatch(logParser::wasLogExecuted);
+    }
+
+    private boolean blockContainsNotPrintedLog(Block block, LogParser logParser) {
+        return getLogsInBlock(block)
+            .stream()
+            .anyMatch(log -> !logParser.wasLogExecuted(log));
     }
 
     // I think this is fine since the call site will always be must, no need for continuing to next call I think
@@ -274,6 +299,102 @@ public class CFG {
                 labelSuccsAs(succ, newLabel);
             }
         }
+    }
+
+    public void collectPaths(
+        Block block,
+        ArrayList<ArrayList<ConditionExpr>> paths,
+        ArrayList<ConditionExpr> path,
+        Unit excludeCallsite
+    ) {
+        var conds = 0;
+        for (var unit : block) {
+            if (callSiteToCFG.containsKey(unit) && unit != excludeCallsite) {
+                var cfg = callSiteToCFG.get(unit);
+                var tails = cfg.cfg.getTails();
+                for (var tail : tails) {
+                    collectPaths(tail, paths, path, null);
+                }
+            }
+            if (unit instanceof JIfStmt) {
+                var ifStmt = (JIfStmt)unit;
+                var cond = (ConditionExpr)ifStmt.getCondition();
+
+                var succs = block.getSuccs();
+                if (succs.size() == 2) {
+                    // The reason for flipping for Must labels is that Soot seems to invert
+                    // conditions. This means we need to re-invert the must and may's, and
+                    // not the must not labels.
+                    var succ = succs.get(0);
+                    var label = labels.get(succ);
+                    if (label == Label.Must || label == Label.May) {
+                        cond = negateCondition(cond);
+                    }
+                }
+
+                path.add(cond);
+                conds++;
+            }
+        }
+
+        // Collect paths in preceding blocks in the method CFG
+        var preds = block.getPreds();
+        for (var pred : preds) {
+            if (labels.containsKey(pred) && labels.get(pred) != Label.MustNot) {
+                collectPaths(pred, paths, path, excludeCallsite);
+            }
+        }
+
+        // Recurse to the next method up in the stack trace
+        if (preds.isEmpty() && !block.getSuccs().isEmpty()) {
+            if (pred.isPresent() && callSite.isPresent()) {
+                var blk = pred.get().findBlockContainingUnit(callSite.get());
+                blk.ifPresent(b -> pred.get().collectPaths(b, paths, path, callSite.get()));
+            } else if (!path.isEmpty() && !paths.contains(path)) {
+                // Add the path, since there was no predecessor method CFG
+                paths.add(new ArrayList<>(path));
+            }
+        }
+
+        // Remove the paths added in this recursive call, since they may not be in
+        // the caller's next path that is found.
+        for (int i = 0; i < conds; ++i) {
+            if (!path.isEmpty()) {
+                path.remove(path.size()-1);
+            }
+        }
+    }
+
+    private ConditionExpr negateCondition(ConditionExpr condition) {
+        var op1 = condition.getOp1();
+        var op2 = condition.getOp2();
+        if (condition instanceof JEqExpr) {
+            return new JNeExpr(op1, op2);
+        } else if (condition instanceof JNeExpr) {
+            return new JEqExpr(op1, op2);
+        } else if (condition instanceof JGeExpr) {
+            return new JLtExpr(op1, op2);
+        } else if (condition instanceof JLeExpr) {
+            return new JGtExpr(op1, op2);
+        } else if (condition instanceof JGtExpr) {
+            return new JLeExpr(op1, op2);
+        } else if (condition instanceof JLtExpr) {
+            return new JGeExpr(op1, op2);
+        }
+
+        /*
+          else if (condition instanceof JAndExpr) {
+            return new JOrExpr(new NegExpr(op1), new JNegExpr(op2));
+        } else if (condition instanceof JOrExpr) {
+
+        } else if (condition instanceof JNegExpr) {
+
+        } else {
+
+        }
+         */
+
+        return condition;
     }
 }
 
