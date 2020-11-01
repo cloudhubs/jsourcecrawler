@@ -1,15 +1,14 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.endpoint;
 
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.Value;
+import lombok.*;
 import lombok.extern.log4j.Log4j2;
 import org.apache.logging.log4j.Level;
 import org.baylor.ecs.cloudhubs.sourcecrawler.cfg.CFG;
+import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,10 +24,14 @@ public class SlicerEndpoint {
         @NonNull
         String stackTrace;
 
+        @NonNull
+        String log;
+
         // Needed to fix 400 errors because of JSON deserialization
         SliceRequest() {
             projectRoot = "";
             stackTrace = "";
+            log = "";
         }
     }
 
@@ -64,7 +67,11 @@ public class SlicerEndpoint {
 
         entry.connectCFGs(cfgs);
 
+        var logParser = new LogParser(logs, s.log);
         var unitAndCFG = entry.findThrowUnitAndCFG(stack);
+        var rootCause = unitAndCFG.getO1();
+        var exceptionLoc = unitAndCFG.getO2();
+        rootCause.beginLabelingAt(exceptionLoc, logParser);
 
 //        entry.getMethod().getActiveBody().getUnits().stream().iterator().forEachRemaining(u -> {
 //            log.log(Level.INFO, "line: " + u.getJavaSourceStartLineNumber() + " col:" + u.getJavaSourceStartColumnNumber());

@@ -186,6 +186,7 @@ public class CFG {
         if (b.isEmpty()) {
             return;
         }
+        labels.put(b.get(), Label.Must);
         labelBlockRecur(b.get(), logParser);
     }
 
@@ -193,17 +194,27 @@ public class CFG {
     private void labelBlockRecur(Block block, LogParser logParser) {
         var preds = block.getPreds();
 
+        for (var unit : block) {
+            if (callSiteToCFG.containsKey(unit)) {
+                var cfg = callSiteToCFG.get(unit);
+                var tails = cfg.cfg.getTails();
+                for (var tail : tails) {
+                    labelBlockRecur(tail, logParser);
+                }
+            }
+        }
+
         for (var pred : preds) {
             var predLabel = labels.get(pred);
             if (predLabel == null) {
                 // If a printed log statement is here, label must
                 if (blockContainsPrintedLog(pred, logParser)) {
-                    labels.put(block, Label.Must);
+                    labels.put(pred, Label.Must);
                 }
 
                 // If one of its children is must, pred is must
                 if (anySuccOfBlockEquals(pred, Label.Must)) {
-                    var mustSucc = block.getSuccs()
+                    var mustSucc = pred.getSuccs()
                         .stream()
                         .filter(s -> labels.get(s).equals(Label.Must))
                         .iterator()
@@ -211,9 +222,10 @@ public class CFG {
 
                     if (mustSucc.getPreds().size() == 1) {
                         labels.put(pred, Label.Must);
-                        labelMaybeSuccsAsMustNot(pred);
+                        labelSuccsAs(pred, Label.MustNot);
                     } else {
                         labels.put(pred, Label.May);
+                        labelSuccsAs(pred, Label.May);
                     }
                 } else if (allSuccOfBlockEquals(pred, Label.May)) {
                     labels.put(pred, Label.May);
@@ -230,15 +242,16 @@ public class CFG {
     }
 
     private boolean anySuccOfBlockEquals(Block block, Label label) {
+        if (block.getSuccs() == null) return false;
         return block.getSuccs()
             .stream()
-            .anyMatch(succ -> labels.get(succ).equals(label));
+            .anyMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
     }
 
     private boolean allSuccOfBlockEquals(Block block, Label label) {
         return block.getSuccs()
             .stream()
-            .allMatch(succ -> labels.get(succ).equals(label));
+            .allMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
     }
 
     private boolean blockContainsPrintedLog(Block block, LogParser logParser) {
@@ -253,12 +266,12 @@ public class CFG {
     }
 
     // I think this is fine since the call site will always be must, no need for continuing to next call I think
-    private void labelMaybeSuccsAsMustNot(Block block) {
-        var label = labels.get(block);
-        if (label != Label.Must) {
-            labels.put(block, Label.MustNot);
-            for (var succ : block.getSuccs()) {
-                labelMaybeSuccsAsMustNot(succ);
+    private void labelSuccsAs(Block block, Label newLabel) {
+        for (var succ : block.getSuccs()) {
+            var label = labels.get(block);
+            if (label != Label.Must) {
+                labels.put(block, newLabel);
+                labelSuccsAs(succ, newLabel);
             }
         }
     }
