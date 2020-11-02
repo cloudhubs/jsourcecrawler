@@ -43,6 +43,7 @@ public class ProjectParser {
         Options.v().set_process_dir(Arrays.stream(dirs).collect(Collectors.toList()));
         Options.v().setPhaseOption("jb", "use-original-names:true");
         Options.v().setPhaseOption("jb", "preserve-source-annotations:true");
+        Options.v().set_whole_shimple(true);
 //        Scene.v().getCallGraph()
 
         Scene.v().loadNecessaryClasses();

@@ -7,7 +7,6 @@ import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.StackTraceMethod;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
-import soot.Scene;
 import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.ConditionExpr;
