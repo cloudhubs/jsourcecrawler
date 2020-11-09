@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Level;
 import org.baylor.ecs.cloudhubs.sourcecrawler.cfg.CFG;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
 import org.springframework.web.bind.annotation.*;
 import soot.jimple.ConditionExpr;
 
@@ -80,8 +81,8 @@ public class SlicerEndpoint {
         var exceptionLoc = unitAndCFG.getO2();
         rootCause.beginLabelingAt(exceptionLoc, logParser);
 
-        var paths = new ArrayList<ArrayList<ConditionExpr>>();
-        var path = new ArrayList<ConditionExpr>();
+        var paths = new ArrayList<ArrayList<PathCondition>>();
+        var path = new ArrayList<PathCondition>();
         var exceptBlock = rootCause.findBlockContainingUnit(exceptionLoc);
         exceptBlock.ifPresent(except -> {
             rootCause.collectPaths(except, paths, path, null);
@@ -91,9 +92,12 @@ public class SlicerEndpoint {
             .stream()
             .map(execPath -> execPath
                 .stream()
+                .map(PathCondition::getCondition)
                 .map(Object::toString)
                 .collect(Collectors.toList()))
             .collect(Collectors.toList());
+
+        var varDeps = entry.collectVarDeps();
 
         var resp = new SliceResponse(pathsStr);
         return resp;

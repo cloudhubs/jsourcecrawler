@@ -1,12 +1,16 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.cfg;
 
 import jas.Pair;
+import jas.Var;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
 import org.baylor.ecs.cloudhubs.sourcecrawler.helper.StackTraceMethod;
+import org.baylor.ecs.cloudhubs.sourcecrawler.helper.VarDependencyMapper;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.VarDependency;
 import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.ConditionExpr;
@@ -300,10 +304,11 @@ public class CFG {
         }
     }
 
+    // TODO convert to Expr
     public void collectPaths(
         Block block,
-        ArrayList<ArrayList<ConditionExpr>> paths,
-        ArrayList<ConditionExpr> path,
+        ArrayList<ArrayList<PathCondition>> paths,
+        ArrayList<PathCondition> path,
         Unit excludeCallsite
     ) {
         var conds = 0;
@@ -331,7 +336,7 @@ public class CFG {
                     }
                 }
 
-                path.add(cond);
+                path.add(new PathCondition(method, cond));
                 conds++;
             }
         }
@@ -394,6 +399,22 @@ public class CFG {
          */
 
         return condition;
+    }
+
+    public List<VarDependency> collectVarDeps() {
+        var deps = new ArrayList<VarDependency>();
+
+        for (var unit : cfg.getBody().getUnits()) {
+            if (unit instanceof AbstractDefinitionStmt) {
+                VarDependencyMapper.map(method, (AbstractDefinitionStmt)unit).ifPresent(deps::add);
+            }
+        }
+
+        return deps
+            .stream()
+            .filter(v -> v.getDeps() == null || v.getDeps().isEmpty())
+            .filter(v -> !v.getVar().startsWith("$"))
+            .collect(Collectors.toList());
     }
 }
 

@@ -36,6 +36,8 @@ dependencies {
     compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310'
     compile group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jdk8'
 
+    implementation group: 'io.github.tudo-aqua', name: 'z3-turnkey', version: '4.8.7.1'
+    //implementation group: 'com.microsoft', name: 'z3', version: '4.8.7'
 
     compile group: 'org.springframework.boot', name: 'spring-boot-starter-web'
     testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test'
