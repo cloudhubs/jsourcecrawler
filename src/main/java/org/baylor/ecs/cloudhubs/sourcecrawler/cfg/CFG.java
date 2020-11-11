@@ -4,15 +4,13 @@ import jas.Pair;
 import jas.Var;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
-import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
-import org.baylor.ecs.cloudhubs.sourcecrawler.helper.StackTraceMethod;
-import org.baylor.ecs.cloudhubs.sourcecrawler.helper.VarDependencyMapper;
+import org.baylor.ecs.cloudhubs.sourcecrawler.helper.*;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.VarDependency;
 import soot.SootMethod;
 import soot.Unit;
+import soot.Value;
 import soot.jimple.ConditionExpr;
 import soot.jimple.internal.*;
 import soot.toolkits.graph.Block;
@@ -338,7 +336,20 @@ public class CFG {
 
                 path.add(new PathCondition(method, cond));
                 conds++;
-            }
+            }/* else if (unit instanceof JAssignStmt) {
+                var assign = (JAssignStmt)unit;
+                var varFinder = new VarFinder();
+                varFinder.findVars(assign.getLeftOp())
+                    .stream()
+                    .filter(name -> !name.startsWith("$"))
+                    .findFirst()
+                    .ifPresent(name -> {
+                        var left = assign.getLeftOp();
+                        var right = assign.getRightOp();
+                        var cond = new PathCondition(method, new JEqExpr(left, right));
+                        path.add(cond);
+                    });
+            }*/
         }
 
         // Collect paths in preceding blocks in the method CFG
