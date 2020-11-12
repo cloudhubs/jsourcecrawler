@@ -1,9 +1,6 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.request;
-import javafx.util.Pair;
-import lombok.extern.java.Log;
 import org.springframework.boot.json.JacksonJsonParser;
 import org.w3c.dom.Node;
-import com.google.gson.Gson;
 
 
 import java.io.File;
@@ -82,7 +79,7 @@ public class RequestAccumulator {
      * Reads JSON file the clustered log file
      * @param fileName The file name of the clustered logs
      */
-    public static FullCluster readJSON(String fileName) throws FileNotFoundException {
+    public static void readJSON(String fileName) throws FileNotFoundException {
         JacksonJsonParser parser = new JacksonJsonParser();
         Gson gson = new Gson();
 
@@ -93,8 +90,6 @@ public class RequestAccumulator {
             jsonString.append(in.nextLine());
         }
         in.close();
-
-        FullCluster logClusters = new FullCluster(); // Holds all the final log clusters
 
         //Read initial JSON object into a map of token length -> list of clusters
         // Triple list is due to output from json
@@ -107,47 +102,34 @@ public class RequestAccumulator {
         for(Map.Entry<Integer, List<List<List<String>>>> entry : parsedMap.entrySet()){
             System.out.println(entry.getKey());
 
-            List<String> outerList = entry.getValue().get(0).get(0);
+            List<String> tokenList = entry.getValue().get(0).get(0);
             List<?> temp_list = entry.getValue().get(0).get(1);
-
-
-            //Un-nest additional list around token list layer and create new single list
-            List<List<String>> tokenList = new ArrayList<>();
-            for(Object t : outerList){
-                ArrayList<String> innerList = (ArrayList)t;
-                tokenList.add(innerList);
-            }
+            List<Boolean> variableList = new ArrayList<>();
 
             //Convert generic values of variable list to booleans
-            List<Boolean> variableList = new ArrayList<>();
-            for(Object b: temp_list){
-                variableList.add((Boolean)b);
+            // Need to un-nest the additional list around tokens
+            for(Object arr: temp_list){
+                ArrayList<String> tokens = (ArrayList)arr;
+
             }
 
-            //Create the log cluster
-            //Assuming the variable list and token list are same length
-            LogCluster cluster = new LogCluster();
-            cluster.setTokenList(tokenList);
-            cluster.setVariableList(variableList);
+            //Token list
+            for(Object t : tokenList){
+                System.out.println(t);
+            }
 
-            cluster.printCluster();
-
-            //Add into the full cluster
-            Object k = entry.getKey();
-            Integer tokenSize = Integer.parseInt((String)k);
-            logClusters.getFullCluster().
-                    put(tokenSize, cluster);
+            System.out.println(variableList);
         }
 
-        return logClusters;
+
+        FullCluster logClusters = new FullCluster();
+//        return logClusters;
     }
 
 
     public static void main(String[] args) throws FileNotFoundException {
-        FullCluster clusteredLogs =
-                readJSON("src/main/java/org/baylor/ecs/cloudhubs/sourcecrawler/request/test.json");
+        readJSON("src/main/java/org/baylor/ecs/cloudhubs/sourcecrawler/request/test.json");
 
-        clusteredLogs.display();
     }
 }
 
@@ -160,22 +142,14 @@ public class RequestAccumulator {
  * #                         is variable or not.
  */
 class FullCluster{
-    protected Map<Integer, LogCluster> fullCluster; //Token size + list of final clusters
+    protected Map<Integer, List<LogCluster>> fullCluster; //Token size + list of final clusters
 
     FullCluster(){
         fullCluster = new HashMap<>(); // Can use linked hash map to keep insertion order
     }
 
-    public Map<Integer, LogCluster> getFullCluster(){
+    public Map<Integer, List<LogCluster>> getFullCluster(){
         return fullCluster;
-    }
-
-    public void display(){
-        for(Map.Entry<Integer, LogCluster> entry: fullCluster.entrySet()){
-            System.out.println(entry.getKey());
-            entry.getValue().printCluster();
-            System.out.println();
-        }
     }
 }
 
@@ -184,36 +158,14 @@ class FullCluster{
  */
 class LogCluster{
 
-    protected List<List<String>> tokenList;  //A list of clusters, with each list containing a list of tokens
-    protected List<Boolean> variableList;    //Variable bool for a token (index is for each token in it's own list)
+    protected List<List<String>> cluster;
 
     public LogCluster(){
-        tokenList = new ArrayList<>();
-        variableList = new ArrayList<>();
+        cluster = new ArrayList<>();
     }
 
-    public List<List<String>> getTokenList() {
-        return tokenList;
-    }
-
-    public void setTokenList(List<List<String>> tokenList) {
-        this.tokenList = tokenList;
-    }
-
-    public List<Boolean> getVariableList() {
-        return variableList;
-    }
-
-    public void setVariableList(List<Boolean> variableList) {
-        this.variableList = variableList;
-    }
-
-    public void printCluster(){
-        for (List<String> strings : tokenList) {
-            for (int index = 0; index < strings.size(); index++) {
-                System.out.println(strings.get(index) + " - " + variableList.get(index));
-            }
-        }
+    public List<List<String>> getCluster(){
+        return cluster;
     }
 }
 
@@ -225,4 +177,3 @@ class RequestNode{
     protected Instant rnStart;
     protected Instant rnEnd;
 }
-
