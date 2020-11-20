@@ -66,9 +66,9 @@ public class SlicerEndpoint {
 
         var unitAndCFG = entry.findThrowUnitAndCFG(stack);
 
-//        entry.getMethod().getActiveBody().getUnits().stream().iterator().forEachRemaining(u -> {
-//            log.log(Level.INFO, "line: " + u.getJavaSourceStartLineNumber() + " col:" + u.getJavaSourceStartColumnNumber());
-//        });
+        entry.getMethod().getActiveBody().getUnits().stream().iterator().forEachRemaining(u -> {
+            log.log(Level.INFO, "line: " + u.getJavaSourceStartLineNumber() + " col:" + u.getJavaSourceStartColumnNumber());
+        });
 
         return ""; // TODO return actual response
     }

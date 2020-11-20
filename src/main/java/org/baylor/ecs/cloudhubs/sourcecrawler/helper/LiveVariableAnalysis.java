@@ -8,7 +8,8 @@ import soot.toolkits.scalar.BackwardFlowAnalysis;
 import soot.toolkits.scalar.FlowSet;
 import soot.toolkits.scalar.ArraySparseSet;
 
-class LiveVariableAnalysis extends BackwardFlowAnalysis<Unit, FlowSet<Local>>
+public class LiveVariableAnalysis extends BackwardFlowAnalysis<Unit,
+        FlowSet<Local>>
 {
 
     private final FlowSet<Local> emptySet;
