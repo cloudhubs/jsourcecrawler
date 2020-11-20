@@ -16,9 +16,12 @@ public class LogParser {
     public LogParser(List<LogType> logTypes, String log) {
         this.logTypes = logTypes;
         printed = new ArrayList<>();
+        logTypes.forEach(l -> printed.add(false));
         this.log = log;
 
-        Arrays.stream(log.split("\n")).forEach(line -> {
+        var split = log.split("\n");
+        var stream = Arrays.stream(split);
+        stream.forEach(line -> {
             for (var logType : logTypes) {
                 if (line.matches(logType.getRegex())) {
                     printed.set(logTypes.indexOf(logType), true);

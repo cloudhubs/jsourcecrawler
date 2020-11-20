@@ -1,14 +1,17 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.cfg;
 
 import jas.Pair;
+import jas.Var;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import org.baylor.ecs.cloudhubs.sourcecrawler.helper.LogParser;
-import org.baylor.ecs.cloudhubs.sourcecrawler.helper.ProjectParser;
-import org.baylor.ecs.cloudhubs.sourcecrawler.helper.StackTraceMethod;
-import soot.Scene;
+import org.baylor.ecs.cloudhubs.sourcecrawler.helper.*;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
+import org.baylor.ecs.cloudhubs.sourcecrawler.model.VarDependency;
 import soot.SootMethod;
 import soot.Unit;
+import soot.Value;
+import soot.jimple.ConditionExpr;
 import soot.jimple.internal.*;
 import soot.toolkits.graph.Block;
 import soot.toolkits.graph.CompleteBlockGraph;
@@ -169,7 +172,7 @@ public class CFG {
 
     // CFG Labeling stuff
 
-    private Optional<Block> findBlockContainingUnit(Unit u) {
+    public Optional<Block> findBlockContainingUnit(Unit u) {
         for (var block : cfg.getBlocks()) {
             for (var unit : block) {
                 if (unit.equals(u)) {
@@ -186,6 +189,7 @@ public class CFG {
         if (b.isEmpty()) {
             return;
         }
+        labels.put(b.get(), Label.Must);
         labelBlockRecur(b.get(), logParser);
     }
 
@@ -193,33 +197,58 @@ public class CFG {
     private void labelBlockRecur(Block block, LogParser logParser) {
         var preds = block.getPreds();
 
+        for (var unit : block) {
+            if (callSiteToCFG.containsKey(unit)) {
+                var cfg = callSiteToCFG.get(unit);
+                var heads = cfg.cfg.getHeads();
+                if (heads.size() == 1) {
+                    cfg.labels.put(heads.get(0), Label.Must);
+                }
+                var tails = cfg.cfg.getTails();
+                for (var tail : tails) {
+                    labelBlockRecur(tail, logParser);
+                }
+            }
+        }
+
         for (var pred : preds) {
+            // If a printed log statement is here, label must
+            if (blockContainsPrintedLog(pred, logParser)) {
+                labels.put(pred, Label.Must);
+            } else if (blockContainsNotPrintedLog(pred, logParser)) {
+                labels.put(pred, Label.MustNot);
+            }
             var predLabel = labels.get(pred);
             if (predLabel == null) {
-                // If a printed log statement is here, label must
-                if (blockContainsPrintedLog(pred, logParser)) {
-                    labels.put(block, Label.Must);
-                }
-
                 // If one of its children is must, pred is must
                 if (anySuccOfBlockEquals(pred, Label.Must)) {
-                    var mustSucc = block.getSuccs()
+                    var mustSucc = pred.getSuccs()
                         .stream()
-                        .filter(s -> labels.get(s).equals(Label.Must))
+                        .filter(s -> labels.containsKey(s) && labels.get(s).equals(Label.Must))
                         .iterator()
                         .next();
 
                     if (mustSucc.getPreds().size() == 1) {
                         labels.put(pred, Label.Must);
-                        labelMaybeSuccsAsMustNot(pred);
+                        labelSuccsAs(pred, Label.MustNot);
                     } else {
                         labels.put(pred, Label.May);
+                        labelSuccsAs(pred, Label.May);
                     }
                 } else if (allSuccOfBlockEquals(pred, Label.May)) {
                     labels.put(pred, Label.May);
+//                    var currLabel = labels.get(pred);
+//                    if (currLabel == Label.MustNot) {
+//                        labelSuccsAs(pred, Label.MustNot);
+//                    } else {
+//
+//                    }
+
                 } else if (allSuccOfBlockEquals(pred, Label.MustNot)) {
                     labels.put(pred, Label.MustNot);
                 }
+            } else if (predLabel == Label.May) {
+
             }
             labelBlockRecur(pred, logParser);
         }
@@ -230,37 +259,173 @@ public class CFG {
     }
 
     private boolean anySuccOfBlockEquals(Block block, Label label) {
+        if (block.getSuccs() == null) return false;
         return block.getSuccs()
             .stream()
-            .anyMatch(succ -> labels.get(succ).equals(label));
+            .anyMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
     }
 
     private boolean allSuccOfBlockEquals(Block block, Label label) {
         return block.getSuccs()
             .stream()
-            .allMatch(succ -> labels.get(succ).equals(label));
+            .allMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
     }
 
-    private boolean blockContainsPrintedLog(Block block, LogParser logParser) {
+    private List<LogType> getLogsInBlock(Block block) {
         List<Unit> units = new ArrayList<>();
         block.iterator().forEachRemaining(units::add);
         var filePath = block.getBody().getMethod().getDeclaringClass().getFilePath();
         var signature = block.getBody().getMethod().getSignature();
-        var logs = ProjectParser.findLogs(units, filePath, signature);
-        return logs
+        return ProjectParser.findLogs(units, filePath, signature);
+    }
+
+    private boolean blockContainsPrintedLog(Block block, LogParser logParser) {
+        return getLogsInBlock(block)
             .stream()
             .anyMatch(logParser::wasLogExecuted);
     }
 
+    private boolean blockContainsNotPrintedLog(Block block, LogParser logParser) {
+        return getLogsInBlock(block)
+            .stream()
+            .anyMatch(log -> !logParser.wasLogExecuted(log));
+    }
+
     // I think this is fine since the call site will always be must, no need for continuing to next call I think
-    private void labelMaybeSuccsAsMustNot(Block block) {
-        var label = labels.get(block);
-        if (label != Label.Must) {
-            labels.put(block, Label.MustNot);
-            for (var succ : block.getSuccs()) {
-                labelMaybeSuccsAsMustNot(succ);
+    private void labelSuccsAs(Block block, Label newLabel) {
+        for (var succ : block.getSuccs()) {
+            var label = labels.get(block);
+            if (label != Label.Must) {
+                labels.put(block, newLabel);
+                labelSuccsAs(succ, newLabel);
             }
         }
+    }
+
+    // TODO convert to Expr
+    public void collectPaths(
+        Block block,
+        ArrayList<ArrayList<PathCondition>> paths,
+        ArrayList<PathCondition> path,
+        Unit excludeCallsite
+    ) {
+        var conds = 0;
+        for (var unit : block) {
+            if (callSiteToCFG.containsKey(unit) && unit != excludeCallsite) {
+                var cfg = callSiteToCFG.get(unit);
+                var tails = cfg.cfg.getTails();
+                for (var tail : tails) {
+                    collectPaths(tail, paths, path, null);
+                }
+            }
+            if (unit instanceof JIfStmt) {
+                var ifStmt = (JIfStmt)unit;
+                var cond = (ConditionExpr)ifStmt.getCondition();
+
+                var succs = block.getSuccs();
+                if (succs.size() == 2) {
+                    // The reason for flipping for Must labels is that Soot seems to invert
+                    // conditions. This means we need to re-invert the must and may's, and
+                    // not the must not labels.
+                    var succ = succs.get(0);
+                    var label = labels.get(succ);
+                    if (label == Label.Must || label == Label.May) {
+                        cond = negateCondition(cond);
+                    }
+                }
+
+                path.add(new PathCondition(method, cond));
+                conds++;
+            }/* else if (unit instanceof JAssignStmt) {
+                var assign = (JAssignStmt)unit;
+                var varFinder = new VarFinder();
+                varFinder.findVars(assign.getLeftOp())
+                    .stream()
+                    .filter(name -> !name.startsWith("$"))
+                    .findFirst()
+                    .ifPresent(name -> {
+                        var left = assign.getLeftOp();
+                        var right = assign.getRightOp();
+                        var cond = new PathCondition(method, new JEqExpr(left, right));
+                        path.add(cond);
+                    });
+            }*/
+        }
+
+        // Collect paths in preceding blocks in the method CFG
+        var preds = block.getPreds();
+        for (var pred : preds) {
+            if (labels.containsKey(pred) && labels.get(pred) != Label.MustNot) {
+                collectPaths(pred, paths, path, excludeCallsite);
+            }
+        }
+
+        // Recurse to the next method up in the stack trace
+        if (preds.isEmpty() && !block.getSuccs().isEmpty()) {
+            if (pred.isPresent() && callSite.isPresent()) {
+                var blk = pred.get().findBlockContainingUnit(callSite.get());
+                blk.ifPresent(b -> pred.get().collectPaths(b, paths, path, callSite.get()));
+            } else if (!path.isEmpty() && !paths.contains(path)) {
+                // Add the path, since there was no predecessor method CFG
+                paths.add(new ArrayList<>(path));
+            }
+        }
+
+        // Remove the paths added in this recursive call, since they may not be in
+        // the caller's next path that is found.
+        for (int i = 0; i < conds; ++i) {
+            if (!path.isEmpty()) {
+                path.remove(path.size()-1);
+            }
+        }
+    }
+
+    private ConditionExpr negateCondition(ConditionExpr condition) {
+        var op1 = condition.getOp1();
+        var op2 = condition.getOp2();
+        if (condition instanceof JEqExpr) {
+            return new JNeExpr(op1, op2);
+        } else if (condition instanceof JNeExpr) {
+            return new JEqExpr(op1, op2);
+        } else if (condition instanceof JGeExpr) {
+            return new JLtExpr(op1, op2);
+        } else if (condition instanceof JLeExpr) {
+            return new JGtExpr(op1, op2);
+        } else if (condition instanceof JGtExpr) {
+            return new JLeExpr(op1, op2);
+        } else if (condition instanceof JLtExpr) {
+            return new JGeExpr(op1, op2);
+        }
+
+        /*
+          else if (condition instanceof JAndExpr) {
+            return new JOrExpr(new NegExpr(op1), new JNegExpr(op2));
+        } else if (condition instanceof JOrExpr) {
+
+        } else if (condition instanceof JNegExpr) {
+
+        } else {
+
+        }
+         */
+
+        return condition;
+    }
+
+    public List<VarDependency> collectVarDeps() {
+        var deps = new ArrayList<VarDependency>();
+
+        for (var unit : cfg.getBody().getUnits()) {
+            if (unit instanceof AbstractDefinitionStmt) {
+                VarDependencyMapper.map(method, (AbstractDefinitionStmt)unit).ifPresent(deps::add);
+            }
+        }
+
+        return deps
+            .stream()
+            .filter(v -> v.getDeps() == null || v.getDeps().isEmpty())
+            .filter(v -> !v.getVar().startsWith("$"))
+            .collect(Collectors.toList());
     }
 }
 
