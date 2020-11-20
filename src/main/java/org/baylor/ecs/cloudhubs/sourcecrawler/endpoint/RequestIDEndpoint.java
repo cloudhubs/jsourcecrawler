@@ -29,7 +29,6 @@ public class RequestIDEndpoint {
         @NonNull
         String projectRoot;
 
-        // Needed to fix 400 errors because of JSON deserialization
         IDRequest() {
             projectRoot = "";
         }
@@ -54,6 +53,14 @@ public class RequestIDEndpoint {
             DirectedGraph<Unit> graph =
                     new CompleteUnitGraph(cfg.getMethod().getActiveBody());
             LiveVariableAnalysis analysis = new LiveVariableAnalysis(graph);
+
+//            "The original thought was that the live" +
+//            "variable analysis would provide a mechanism for" +
+//            "removing variables that have been rewritten" +
+//            "from the set of live variables, but this is" +
+//            "not the case."
+
+
 
             for (Unit u : graph) {
                 System.out.println(u.toString());
