@@ -10,7 +10,6 @@ import soot.toolkits.scalar.ArraySparseSet;
 
 class LiveVariableAnalysis extends BackwardFlowAnalysis<Unit, FlowSet<Local>>
 {
-
     private final FlowSet<Local> emptySet;
 
     public LiveVariableAnalysis(DirectedGraph<Unit> g) {

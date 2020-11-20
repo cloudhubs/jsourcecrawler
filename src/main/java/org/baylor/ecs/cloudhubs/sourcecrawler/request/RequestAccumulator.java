@@ -1,5 +1,6 @@
 package org.baylor.ecs.cloudhubs.sourcecrawler.request;
 import lombok.extern.java.Log;
+import org.baylor.ecs.cloudhubs.sourcecrawler.cfg.CFG;
 import org.springframework.boot.json.JacksonJsonParser;
 import org.w3c.dom.Node;
 import com.google.gson.Gson;
@@ -22,9 +23,9 @@ import java.util.stream.Collectors;
  * and its associated log/static analysis information
  */
 public class RequestAccumulator {
-    protected List<String> methods; // Contains a list of top level methods TODO: Data type? (SootMethod or CFG)
+    protected List<CFG> methods; // Contains a list of top level methods (Using the CFG created)
     protected List<String> logPointSequences; // TODO: Data type? List of log point sequences (each comes from a top-level method)
-    protected List<String> nodes;    // TODO: List of nodes traversed (Change into node data type with start & end timestamps for each)
+    protected List<RequestNode> nodes; // List of nodes traversed with start & end timestamps for each)
     protected int requestID;        // Request identifier value (not sure if this needs to be a list)
     protected Instant startTime;    // Start timestamp
     protected Instant endTime;      // End timestamp
@@ -38,11 +39,11 @@ public class RequestAccumulator {
         endTime = Instant.now();
     }
 
-    public List<String> getMethods() {
+    public List<CFG> getMethods() {
         return methods;
     }
 
-    public void setMethods(List<String> methods) {
+    public void setMethods(List<CFG> methods) {
         this.methods = methods;
     }
 
@@ -54,11 +55,11 @@ public class RequestAccumulator {
         this.logPointSequences = logPointSequences;
     }
 
-    public List<String> getNodes() {
+    public List<RequestNode> getNodes() {
         return nodes;
     }
 
-    public void setNodes(List<String> nodes) {
+    public void setNodes(List<RequestNode> nodes) {
         this.nodes = nodes;
     }
 
@@ -90,10 +91,9 @@ public class RequestAccumulator {
     public static void main(String[] args) throws FileNotFoundException {
         FullCluster clusteredLogs =
                 FullCluster.readJSON("src/main/java/org/baylor/ecs/cloudhubs/sourcecrawler/request/test.json");
+        clusteredLogs.display();
 
         RequestAccumulator ra = new RequestAccumulator();
-
-        clusteredLogs.display();
     }
 
 }

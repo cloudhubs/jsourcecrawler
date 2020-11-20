@@ -1,11 +1,12 @@
-//package org.baylor.ecs.cloudhubs.sourcecrawler.request;
-//
-//import java.sql.Connection;
-//import java.sql.DriverManager;
-//import java.sql.SQLException;
-//import java.util.Properties;
-//
-//// Basic db connection, will use later to store request info
+package org.baylor.ecs.cloudhubs.sourcecrawler.request;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.Properties;
+
+// Basic db connection, will use later to store request info
+
 //public class DBConnector {
 //
 //    public static Connection startConn() throws SQLException {
