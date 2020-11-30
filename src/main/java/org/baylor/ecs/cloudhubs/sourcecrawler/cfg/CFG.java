@@ -8,13 +8,12 @@ import org.baylor.ecs.cloudhubs.sourcecrawler.helper.*;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.VarDependency;
-import soot.SootMethod;
-import soot.Unit;
-import soot.Value;
+import soot.*;
 import soot.jimple.ConditionExpr;
 import soot.jimple.internal.*;
-import soot.toolkits.graph.Block;
-import soot.toolkits.graph.CompleteBlockGraph;
+import soot.toolkits.graph.*;
+import soot.toolkits.scalar.ArraySparseSet;
+import soot.toolkits.scalar.FlowSet;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,9 +30,14 @@ public class CFG {
     enum Label { Must, May, MustNot };
     protected HashMap<Block, Label> labels;
 
+    @Getter
     protected HashMap<Unit, CFG> callSiteToCFG;
     protected Optional<CFG> pred;
     protected Optional<Unit> callSite;
+
+    @Getter
+    FlowSet<Local> reqIDs = new ArraySparseSet<>();
+    FlowSet<Local> writes = new ArraySparseSet<>();
 
     public CFG(SootMethod m) throws RuntimeException {
         method = m;
@@ -48,7 +52,14 @@ public class CFG {
     }
 
     public CFG copyWrapper(CFG predCFG, Unit callSiteUnit) {
-        return new CFG(method, cfg, new HashMap<>(), new HashMap<>(), Optional.of(predCFG), Optional.of(callSiteUnit));
+        FlowSet<Local> emptySet = new ArraySparseSet<>();
+        return new CFG(method, cfg,
+                new HashMap<>(),
+                new HashMap<>(),
+                Optional.of(predCFG),
+                Optional.of(callSiteUnit),
+                emptySet.clone(),
+                emptySet.clone());
     }
 
     public void connectCFGs(List<CFG> methods) {
@@ -426,6 +437,49 @@ public class CFG {
             .filter(v -> v.getDeps() == null || v.getDeps().isEmpty())
             .filter(v -> !v.getVar().startsWith("$"))
             .collect(Collectors.toList());
+    }
+
+    public void requestIDsForCFG(){
+        callSiteToCFG.forEach(
+                (unit, cfg) -> {
+                    //recurse to populate lists in lower CFGs
+                    cfg.requestIDsForCFG();
+                }
+        );
+
+        //analyze this CFG
+        DirectedGraph<Unit> graph =
+                new CompleteUnitGraph(this.getMethod().getActiveBody());
+
+        FlowSet<Local> reads = new ArraySparseSet<>();
+
+        //add all writes and reads from every unit
+        //in the method
+        for(Unit node : graph){
+            for (ValueBox use: node.getUseBoxes()) {
+                if (use.getValue() instanceof Local) {
+                    reads.add((Local) use.getValue());
+                }
+            }
+
+            for (ValueBox def: node.getUseAndDefBoxes()) {
+                if (def.getValue() instanceof Local) {
+                    writes.add((Local) def.getValue());
+                }
+            }
+
+        }
+
+        //reads - writes = request identifiers
+        reads.difference(writes, reqIDs);
+
+        //remove lower CFG writes from this CFGs, reqIDs
+        callSiteToCFG.forEach(
+                (unit, cfg) -> {
+                    //remove writes from this reqIDs
+                    this.reqIDs.difference(cfg.writes, this.reqIDs);
+                }
+        );
     }
 }
 
