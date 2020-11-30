@@ -27,11 +27,10 @@ public class RequestIDEndpoint {
 
     @PostMapping("/id")
     public String id(@RequestBody IDRequest s) {
-        log.info(s.projectRoot);
         ProjectParser parser = new ProjectParser(s.projectRoot);
         List<CFG> cfgs = new ArrayList<>();
-        log.log(Level.WARN, "sample log: " + s.projectRoot + " -> " + cfgs);
 
+        //make cfg for each method in project
         parser.getSootMethods().forEach(m -> {
             try {
                 cfgs.add(new CFG(m));
@@ -40,11 +39,13 @@ public class RequestIDEndpoint {
             }
         });
 
+        //expand all cfgs
         cfgs.forEach(cfg -> {
             cfg.connectCFGs(cfgs);
         });
 
-
+        //remove cfgs that are called in others
+        //to find the main cfg(s) for the project
         cfgs.forEach(cfg -> {
             cfgs.forEach(cfg2 -> {
                 if(cfg.getCallSiteToCFG().containsValue(cfg2)){
@@ -53,10 +54,12 @@ public class RequestIDEndpoint {
             });
         });
 
+        //find the request IDs
         cfgs.forEach(cfg -> {
             cfg.requestIDsForCFG();
         });
 
+        //log request IDs
         cfgs.forEach(cfg -> {
             log.info(cfg.getReqIDs());
         });
