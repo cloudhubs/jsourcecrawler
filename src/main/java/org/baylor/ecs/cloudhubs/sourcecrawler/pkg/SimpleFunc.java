@@ -9,7 +9,7 @@ public class SimpleFunc {
         }
 
         int y = 3;
-        x += foo(y);
+        foo(y);
 
         if(x > 4){
             System.out.println("high");

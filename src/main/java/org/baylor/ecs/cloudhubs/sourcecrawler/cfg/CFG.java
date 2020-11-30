@@ -36,8 +36,11 @@ public class CFG {
     protected Optional<Unit> callSite;
 
     @Getter
-    FlowSet<Local> reqIDs = new ArraySparseSet<>();
-    FlowSet<Local> writes = new ArraySparseSet<>();
+    FlowSet<Local> reqIDs;
+    FlowSet<Local> reads;
+    FlowSet<Local> writes;
+
+    static FlowSet<Local> emptySet = new ArraySparseSet<>();
 
     public CFG(SootMethod m) throws RuntimeException {
         method = m;
@@ -49,15 +52,20 @@ public class CFG {
         // Throws RunTimeException if a body can't be retrieved
         var body = method.getActiveBody();
         cfg = new CompleteBlockGraph(body);
+
+        reqIDs = emptySet.clone();
+        writes = emptySet.clone();
+        reads = emptySet.clone();
     }
 
     public CFG copyWrapper(CFG predCFG, Unit callSiteUnit) {
-        FlowSet<Local> emptySet = new ArraySparseSet<>();
+
         return new CFG(method, cfg,
                 new HashMap<>(),
                 new HashMap<>(),
                 Optional.of(predCFG),
                 Optional.of(callSiteUnit),
+                emptySet.clone(),
                 emptySet.clone(),
                 emptySet.clone());
     }
@@ -450,8 +458,6 @@ public class CFG {
         //analyze this CFG
         DirectedGraph<Unit> graph =
                 new CompleteUnitGraph(this.getMethod().getActiveBody());
-
-        FlowSet<Local> reads = new ArraySparseSet<>();
 
         //add all writes and reads from every unit
         //in the method
