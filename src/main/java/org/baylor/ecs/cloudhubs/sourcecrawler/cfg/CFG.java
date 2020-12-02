@@ -8,18 +8,16 @@ import org.baylor.ecs.cloudhubs.sourcecrawler.helper.*;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.VarDependency;
-import soot.SootMethod;
-import soot.Unit;
-import soot.Value;
+import soot.*;
 import soot.jimple.ConditionExpr;
+import soot.jimple.FieldRef;
+import soot.jimple.StaticFieldRef;
 import soot.jimple.internal.*;
-import soot.toolkits.graph.Block;
-import soot.toolkits.graph.CompleteBlockGraph;
+import soot.toolkits.graph.*;
+import soot.toolkits.scalar.ArraySparseSet;
+import soot.toolkits.scalar.FlowSet;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @AllArgsConstructor
@@ -31,9 +29,17 @@ public class CFG {
     enum Label { Must, May, MustNot };
     protected HashMap<Block, Label> labels;
 
+    @Getter
     protected HashMap<Unit, CFG> callSiteToCFG;
     protected Optional<CFG> pred;
     protected Optional<Unit> callSite;
+
+    @Getter
+    FlowSet<Value> reqIDs;
+    FlowSet<Value> reads;
+    FlowSet<Value> writes;
+
+    static FlowSet<Value> emptySet = new ArraySparseSet<>();
 
     public CFG(SootMethod m) throws RuntimeException {
         method = m;
@@ -45,10 +51,37 @@ public class CFG {
         // Throws RunTimeException if a body can't be retrieved
         var body = method.getActiveBody();
         cfg = new CompleteBlockGraph(body);
+
+        reqIDs = emptySet.clone();
+        writes = emptySet.clone();
+        reads = emptySet.clone();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        CFG cfg = (CFG) o;
+
+        return method.equals(cfg.method);
+    }
+
+    @Override
+    public int hashCode() {
+        return method.hashCode();
     }
 
     public CFG copyWrapper(CFG predCFG, Unit callSiteUnit) {
-        return new CFG(method, cfg, new HashMap<>(), new HashMap<>(), Optional.of(predCFG), Optional.of(callSiteUnit));
+
+        return new CFG(method, cfg,
+                new HashMap<>(),
+                new HashMap<>(),
+                Optional.of(predCFG),
+                Optional.of(callSiteUnit),
+                reqIDs,
+                reads,
+                writes);
     }
 
     public void connectCFGs(List<CFG> methods) {
@@ -426,6 +459,49 @@ public class CFG {
             .filter(v -> v.getDeps() == null || v.getDeps().isEmpty())
             .filter(v -> !v.getVar().startsWith("$"))
             .collect(Collectors.toList());
+    }
+
+    public void requestIDsForCFG(){
+        callSiteToCFG.forEach(
+                (unit, cfg) -> {
+                    //recurse to populate lists in lower CFGs
+                    cfg.requestIDsForCFG();
+                }
+        );
+
+        //add all writes and reads from every unit
+        //in the method
+        for(Block node : cfg){
+            for (ValueBox use: node.getBody().getUseBoxes()) {
+                var val = use.getValue();
+                if(val instanceof AbstractInstanceFieldRef
+                        || val instanceof Local
+                        || val instanceof StaticFieldRef){
+                    reads.add(use.getValue());
+                }
+            }
+
+            for (ValueBox def: node.getBody().getUseAndDefBoxes()) {
+                var val = def.getValue();
+                if(val instanceof AbstractInstanceFieldRef
+                        || val instanceof Local
+                        || val instanceof StaticFieldRef) {
+                    writes.add(def.getValue());
+                }
+            }
+
+        }
+
+        //reads - writes = request identifiers
+        reads.difference(writes, reqIDs);
+
+        //remove lower CFG writes from this CFGs, reqIDs
+        callSiteToCFG.forEach(
+                (unit, cfg) -> {
+                    //remove writes from this reqIDs
+                    this.reqIDs.difference(cfg.writes, this.reqIDs);
+                }
+        );
     }
 }
 
