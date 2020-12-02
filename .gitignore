@@ -4,3 +4,7 @@ build/
 docker-compose.yml
 Dockerfile
 classes/
+bin/
+.settings/org.eclipse.buildship.core.prefs
+.project
+.classpath
