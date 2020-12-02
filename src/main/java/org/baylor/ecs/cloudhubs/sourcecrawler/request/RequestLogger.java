@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.logging.*;
 
+/**
+ * Logs to a specific file
+ */
 public class RequestLogger {
 
     protected static final String LOG_NAME = "RequestLog";
