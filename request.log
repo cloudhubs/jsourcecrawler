@@ -1,0 +1,4 @@
+INFO - Request ID on entry: D2AB0548831E38B27C38B7C4AF316839
+INFO - Request Session: org.apache.catalina.session.StandardSessionFacade@66f8cd24
+INFO - 105DD58AD53AAD6362F0CE6E41F89F03 org.apache.catalina.session.StandardSessionFacade@1e8e690e entering
+INFO - 105DD58AD53AAD6362F0CE6E41F89F03 org.apache.catalina.session.StandardSessionFacade@1e8e690e exiting
