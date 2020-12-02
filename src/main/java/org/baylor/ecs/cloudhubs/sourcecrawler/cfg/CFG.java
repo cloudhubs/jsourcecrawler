@@ -10,15 +10,14 @@ import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.VarDependency;
 import soot.*;
 import soot.jimple.ConditionExpr;
+import soot.jimple.FieldRef;
+import soot.jimple.StaticFieldRef;
 import soot.jimple.internal.*;
 import soot.toolkits.graph.*;
 import soot.toolkits.scalar.ArraySparseSet;
 import soot.toolkits.scalar.FlowSet;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @AllArgsConstructor
@@ -36,11 +35,11 @@ public class CFG {
     protected Optional<Unit> callSite;
 
     @Getter
-    FlowSet<Local> reqIDs;
-    FlowSet<Local> reads;
-    FlowSet<Local> writes;
+    FlowSet<Value> reqIDs;
+    FlowSet<Value> reads;
+    FlowSet<Value> writes;
 
-    static FlowSet<Local> emptySet = new ArraySparseSet<>();
+    static FlowSet<Value> emptySet = new ArraySparseSet<>();
 
     public CFG(SootMethod m) throws RuntimeException {
         method = m;
@@ -58,6 +57,21 @@ public class CFG {
         reads = emptySet.clone();
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        CFG cfg = (CFG) o;
+
+        return method.equals(cfg.method);
+    }
+
+    @Override
+    public int hashCode() {
+        return method.hashCode();
+    }
+
     public CFG copyWrapper(CFG predCFG, Unit callSiteUnit) {
 
         return new CFG(method, cfg,
@@ -65,9 +79,9 @@ public class CFG {
                 new HashMap<>(),
                 Optional.of(predCFG),
                 Optional.of(callSiteUnit),
-                emptySet.clone(),
-                emptySet.clone(),
-                emptySet.clone());
+                reqIDs,
+                reads,
+                writes);
     }
 
     public void connectCFGs(List<CFG> methods) {
@@ -455,22 +469,24 @@ public class CFG {
                 }
         );
 
-        //analyze this CFG
-        DirectedGraph<Unit> graph =
-                new CompleteUnitGraph(this.getMethod().getActiveBody());
-
         //add all writes and reads from every unit
         //in the method
-        for(Unit node : graph){
-            for (ValueBox use: node.getUseBoxes()) {
-                if (use.getValue() instanceof Local) {
-                    reads.add((Local) use.getValue());
+        for(Block node : cfg){
+            for (ValueBox use: node.getBody().getUseBoxes()) {
+                var val = use.getValue();
+                if(val instanceof AbstractInstanceFieldRef
+                        || val instanceof Local
+                        || val instanceof StaticFieldRef){
+                    reads.add(use.getValue());
                 }
             }
 
-            for (ValueBox def: node.getUseAndDefBoxes()) {
-                if (def.getValue() instanceof Local) {
-                    writes.add((Local) def.getValue());
+            for (ValueBox def: node.getBody().getUseAndDefBoxes()) {
+                var val = def.getValue();
+                if(val instanceof AbstractInstanceFieldRef
+                        || val instanceof Local
+                        || val instanceof StaticFieldRef) {
+                    writes.add(def.getValue());
                 }
             }
 

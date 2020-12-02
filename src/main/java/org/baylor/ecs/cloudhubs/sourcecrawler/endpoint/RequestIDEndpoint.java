@@ -46,21 +46,22 @@ public class RequestIDEndpoint {
 
         //remove cfgs that are called in others
         //to find the main cfg(s) for the project
+        List<CFG> topLevelCFGs = new ArrayList<>(List.copyOf(cfgs));
         cfgs.forEach(cfg -> {
             cfgs.forEach(cfg2 -> {
                 if(cfg.getCallSiteToCFG().containsValue(cfg2)){
-                    cfgs.remove(cfg2);
+                    topLevelCFGs.remove(cfg2);
                 }
             });
         });
 
         //find the request IDs
-        cfgs.forEach(cfg -> {
+        topLevelCFGs.forEach(cfg -> {
             cfg.requestIDsForCFG();
         });
 
         //log request IDs
-        cfgs.forEach(cfg -> {
+        topLevelCFGs.forEach(cfg -> {
             log.info(cfg.getReqIDs());
         });
 
