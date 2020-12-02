@@ -24,15 +24,15 @@ import java.util.stream.Collectors;
  */
 public class RequestAccumulator {
     protected List<CFG> methods; // Contains a list of top level methods (Using the CFG created)
-    protected List<String> logPointSequences; // TODO: Data type? List of log point sequences (each comes from a top-level method)
+    protected FullCluster logPointSequences; // Logs associated with the request
     protected List<RequestNode> nodes; // List of nodes traversed with start & end timestamps for each)
-    protected int requestID;        // Request identifier value (not sure if this needs to be a list)
-    protected Instant startTime;    // Start timestamp
-    protected Instant endTime;      // End timestamp
+    protected int requestID;        // Request identifier value --
+    protected Instant startTime;    // Start timestamp (if it is available in the logs)
+    protected Instant endTime;      // End timestamp (if it is available in the logs)
 
     public RequestAccumulator(){
         methods = new ArrayList<>();
-        logPointSequences = new ArrayList<>();
+        logPointSequences = new FullCluster();
         nodes = new ArrayList<>();
         requestID = 0;
         startTime = Instant.now();
@@ -47,11 +47,11 @@ public class RequestAccumulator {
         this.methods = methods;
     }
 
-    public List<String> getLogPointSequences() {
+    public FullCluster getLogPointSequences() {
         return logPointSequences;
     }
 
-    public void setLogPointSequences(List<String> logPointSequences) {
+    public void setLogPointSequences(FullCluster logPointSequences) {
         this.logPointSequences = logPointSequences;
     }
 
