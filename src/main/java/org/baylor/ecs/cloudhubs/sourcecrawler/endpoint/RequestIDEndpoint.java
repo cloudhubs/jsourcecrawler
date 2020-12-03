@@ -47,9 +47,12 @@ public class RequestIDEndpoint {
         //remove non-main cfgs (init,clinit, cfgs contained in others)
         List<CFG> topLevelCFGs = new ArrayList<>(List.copyOf(cfgs));
         cfgs.forEach(cfg -> {
-            if(! cfg.getMethod().isMain()){
-                topLevelCFGs.remove(cfg);
-            }
+            cfgs.forEach(cfg2 -> {
+                if(cfg.getCallSiteToCFG().containsValue(cfg2)
+                        || cfg2.getMethod().getName().startsWith("<")){
+                    topLevelCFGs.remove(cfg2);
+                }
+            });
         });
 
         //find the request IDs

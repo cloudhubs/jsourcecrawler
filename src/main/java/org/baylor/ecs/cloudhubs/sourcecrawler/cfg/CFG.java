@@ -8,6 +8,7 @@ import org.baylor.ecs.cloudhubs.sourcecrawler.helper.*;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.LogType;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.PathCondition;
 import org.baylor.ecs.cloudhubs.sourcecrawler.model.VarDependency;
+import org.baylor.ecs.cloudhubs.sourcecrawler.val.Val;
 import soot.*;
 import soot.jimple.ConditionExpr;
 import soot.jimple.FieldRef;
@@ -26,7 +27,9 @@ public class CFG {
     protected SootMethod method;
     protected CompleteBlockGraph cfg;
 
-    enum Label { Must, May, MustNot };
+    enum Label {Must, May, MustNot}
+
+    ;
     protected HashMap<Block, Label> labels;
 
     @Getter
@@ -35,11 +38,9 @@ public class CFG {
     protected Optional<Unit> callSite;
 
     @Getter
-    FlowSet<Value> reqIDs;
-    FlowSet<Value> reads;
-    FlowSet<Value> writes;
-
-    static FlowSet<Value> emptySet = new ArraySparseSet<>();
+    Map<Val, Integer> reqIDs;
+    Map<Val, Integer> reads;
+    Map<Val, Integer> writes;
 
     public CFG(SootMethod m) throws RuntimeException {
         method = m;
@@ -52,9 +53,9 @@ public class CFG {
         var body = method.getActiveBody();
         cfg = new CompleteBlockGraph(body);
 
-        reqIDs = emptySet.clone();
-        writes = emptySet.clone();
-        reads = emptySet.clone();
+        reqIDs = new HashMap<>();
+        writes = new HashMap<>();
+        reads = new HashMap<>();
     }
 
     @Override
@@ -86,9 +87,9 @@ public class CFG {
 
     public void connectCFGs(List<CFG> methods) {
         var unitIters = cfg.getBlocks()
-            .stream()
-            .map(Block::iterator)
-            .collect(Collectors.toList());
+                .stream()
+                .map(Block::iterator)
+                .collect(Collectors.toList());
         for (var it : unitIters) {
             it.forEachRemaining(unit -> {
                 var callee = findUnitCallee(unit, methods);
@@ -107,15 +108,15 @@ public class CFG {
     private static Optional<CFG> findUnitCallee(Unit unit, List<CFG> methods) {
         Optional<CFG> callee = Optional.empty();
         if (unit instanceof AbstractInvokeExpr) {
-            callee = findCalleeCFG((AbstractInvokeExpr)unit, methods);
+            callee = findCalleeCFG((AbstractInvokeExpr) unit, methods);
         } else if (unit instanceof JAssignStmt) {
             var right = ((JAssignStmt) unit).getRightOp();
             if (right instanceof AbstractInvokeExpr) {
-                callee = findCalleeCFG((AbstractInvokeExpr)right, methods);
+                callee = findCalleeCFG((AbstractInvokeExpr) right, methods);
             }
         } else if (unit instanceof JInvokeStmt) {
             var invokeExpr = ((JInvokeStmt) unit).getInvokeExpr();
-            callee = findCalleeCFG((AbstractInvokeExpr)invokeExpr, methods);
+            callee = findCalleeCFG((AbstractInvokeExpr) invokeExpr, methods);
         }
         return callee;
     }
@@ -123,11 +124,11 @@ public class CFG {
     private static Optional<CFG> findCalleeCFG(AbstractInvokeExpr invokeExpr, List<CFG> methods) {
         var method = invokeExpr.getMethod();
         var m = methods.stream()
-            .filter(cfg -> {
-                var met = cfg.getMethod();
-                return met.getSignature().equals(method.getSignature());
-            })
-            .collect(Collectors.toList());
+                .filter(cfg -> {
+                    var met = cfg.getMethod();
+                    return met.getSignature().equals(method.getSignature());
+                })
+                .collect(Collectors.toList());
         if (m.size() > 0) {
             return Optional.of(m.get(0));
         }
@@ -144,7 +145,7 @@ public class CFG {
                     // Found a block that must have executed since a stack trace method call was found.
                     labels.put(block, Label.Must);
                     return callee.findThrowUnitAndCFG(trace);
-                } else if (unit instanceof JThrowStmt && exceptionMatches(block, (JThrowStmt)unit, trace)) {
+                } else if (unit instanceof JThrowStmt && exceptionMatches(block, (JThrowStmt) unit, trace)) {
                     return new Pair<>(this, unit);
                 }
             }
@@ -155,8 +156,8 @@ public class CFG {
     private boolean callSiteIsStackTraceCall(Unit unit, List<StackTraceMethod> trace) {
         // Find the call(s) of the current method in the stack trace
         var methods = trace.stream()
-            .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
-            .collect(Collectors.toList());
+                .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
+                .collect(Collectors.toList());
 
         // Find a call where the exception line matches the Unit method call line
         for (var stackMethod : methods) {
@@ -168,8 +169,8 @@ public class CFG {
     }
 
     /**
-     * Checks whether the `JThrowStmt` given has the same line number as the one in the stack trace, and it is
-     * thrown from the same method.
+     * Checks whether the `JThrowStmt` given has the same line number as the one
+     * in the stack trace, and it is thrown from the same method.
      *
      * @return whether the exception matched or not
      */
@@ -178,8 +179,8 @@ public class CFG {
         if (exception.isPresent()) {
             // Find the method in the stack trace
             var methods = trace.stream()
-                .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
-                .collect(Collectors.toList());
+                    .filter(stackMethod -> stackMethod.getMethod().getSignature().equals(method.getSignature()))
+                    .collect(Collectors.toList());
 
             for (var stackMethod : methods) {
                 // Verify the line number is the same for this call site
@@ -194,7 +195,7 @@ public class CFG {
     private static Optional<String> findExceptionType(Block block, Unit u) {
         for (var pred = block.getPredOf(u); pred != null; pred = block.getPredOf(pred)) {
             if (pred instanceof JAssignStmt) {
-                var right = ((JAssignStmt)pred).getRightOp();
+                var right = ((JAssignStmt) pred).getRightOp();
                 if (right instanceof JNewExpr) {
                     return Optional.of(right.toString().split("\\s")[1]);
                 }
@@ -256,10 +257,10 @@ public class CFG {
                 // If one of its children is must, pred is must
                 if (anySuccOfBlockEquals(pred, Label.Must)) {
                     var mustSucc = pred.getSuccs()
-                        .stream()
-                        .filter(s -> labels.containsKey(s) && labels.get(s).equals(Label.Must))
-                        .iterator()
-                        .next();
+                            .stream()
+                            .filter(s -> labels.containsKey(s) && labels.get(s).equals(Label.Must))
+                            .iterator()
+                            .next();
 
                     if (mustSucc.getPreds().size() == 1) {
                         labels.put(pred, Label.Must);
@@ -294,14 +295,14 @@ public class CFG {
     private boolean anySuccOfBlockEquals(Block block, Label label) {
         if (block.getSuccs() == null) return false;
         return block.getSuccs()
-            .stream()
-            .anyMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
+                .stream()
+                .anyMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
     }
 
     private boolean allSuccOfBlockEquals(Block block, Label label) {
         return block.getSuccs()
-            .stream()
-            .allMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
+                .stream()
+                .allMatch(succ -> labels.containsKey(succ) && labels.get(succ).equals(label));
     }
 
     private List<LogType> getLogsInBlock(Block block) {
@@ -314,14 +315,14 @@ public class CFG {
 
     private boolean blockContainsPrintedLog(Block block, LogParser logParser) {
         return getLogsInBlock(block)
-            .stream()
-            .anyMatch(logParser::wasLogExecuted);
+                .stream()
+                .anyMatch(logParser::wasLogExecuted);
     }
 
     private boolean blockContainsNotPrintedLog(Block block, LogParser logParser) {
         return getLogsInBlock(block)
-            .stream()
-            .anyMatch(log -> !logParser.wasLogExecuted(log));
+                .stream()
+                .anyMatch(log -> !logParser.wasLogExecuted(log));
     }
 
     // I think this is fine since the call site will always be must, no need for continuing to next call I think
@@ -337,10 +338,10 @@ public class CFG {
 
     // TODO convert to Expr
     public void collectPaths(
-        Block block,
-        ArrayList<ArrayList<PathCondition>> paths,
-        ArrayList<PathCondition> path,
-        Unit excludeCallsite
+            Block block,
+            ArrayList<ArrayList<PathCondition>> paths,
+            ArrayList<PathCondition> path,
+            Unit excludeCallsite
     ) {
         var conds = 0;
         for (var unit : block) {
@@ -352,8 +353,8 @@ public class CFG {
                 }
             }
             if (unit instanceof JIfStmt) {
-                var ifStmt = (JIfStmt)unit;
-                var cond = (ConditionExpr)ifStmt.getCondition();
+                var ifStmt = (JIfStmt) unit;
+                var cond = (ConditionExpr) ifStmt.getCondition();
 
                 var succs = block.getSuccs();
                 if (succs.size() == 2) {
@@ -408,7 +409,7 @@ public class CFG {
         // the caller's next path that is found.
         for (int i = 0; i < conds; ++i) {
             if (!path.isEmpty()) {
-                path.remove(path.size()-1);
+                path.remove(path.size() - 1);
             }
         }
     }
@@ -450,59 +451,63 @@ public class CFG {
 
         for (var unit : cfg.getBody().getUnits()) {
             if (unit instanceof AbstractDefinitionStmt) {
-                VarDependencyMapper.map(method, (AbstractDefinitionStmt)unit).ifPresent(deps::add);
+                VarDependencyMapper.map(method, (AbstractDefinitionStmt) unit).ifPresent(deps::add);
             }
         }
 
         return deps
-            .stream()
-            .filter(v -> v.getDeps() == null || v.getDeps().isEmpty())
-            .filter(v -> !v.getVar().startsWith("$"))
-            .collect(Collectors.toList());
+                .stream()
+                .filter(v -> v.getDeps() == null || v.getDeps().isEmpty())
+                .filter(v -> !v.getVar().startsWith("$"))
+                .collect(Collectors.toList());
     }
 
-    public void requestIDsForCFG(){
-        callSiteToCFG.forEach(
-                (unit, cfg) -> {
-                    //recurse to populate lists in lower CFGs
-                    cfg.requestIDsForCFG();
-                }
-        );
-
+    public void requestIDsForCFG() {
         //add all writes and reads from every unit
         //in the method
-        for(Block node : cfg){
-            for (ValueBox use: node.getBody().getUseBoxes()) {
-                addValueToSet(use, reads);
-            }
+        for (Block node : cfg) {
+            node.getBody().getUseBoxes().forEach(
+                    use -> addValueToSet(use, reads));
 
-            for (ValueBox def: node.getBody().getDefBoxes()) {
-                addValueToSet(def,writes);
-            }
-
+            node.getBody().getDefBoxes().forEach(
+                    def -> addValueToSet(def, writes));
         }
 
         //reads - writes = request identifiers
-        reads.difference(writes, reqIDs);
+        reqIDs.putAll(reads);
+        writes.forEach((val, count) -> {
+            reqIDs.remove(val);
+        });
 
         //remove lower CFG writes from this CFGs, reqIDs
         callSiteToCFG.forEach(
                 (unit, cfg) -> {
                     //remove writes from this reqIDs
-                    this.reqIDs.difference(cfg.writes, this.reqIDs);
+                    cfg.requestIDsForCFG();
+                    cfg.reqIDs.forEach((val, count) -> {
+                        //add count of inner reqIDs to this
+                        //method
+                        reqIDs.merge(val, count, Integer::sum);
+                    });
+
+                    //remove vars modified in inner method
+                    //from reqIDs
+                    cfg.writes.forEach((val, count) -> {
+                        reqIDs.remove(val);
+                    });
                 }
         );
     }
 
-    private static void addValueToSet(ValueBox use, FlowSet<Value> set) {
+    private static void addValueToSet(ValueBox use, Map<Val, Integer> set) {
         var val = use.getValue();
         //filter out all but InstanceFieldRefs, StaticFieldRefs, and Locals
         //that are not part of a java library
-        if(val instanceof AbstractInstanceFieldRef
+        if (val instanceof AbstractInstanceFieldRef
                 || val instanceof Local
                 || val instanceof StaticFieldRef
-        && ! val.getType().toQuotedString().contains("java.")){
-            set.add(val);
+                && !val.getType().toQuotedString().contains("java.")) {
+            set.merge(new Val(val), 1, Integer::sum);
         }
     }
 }
