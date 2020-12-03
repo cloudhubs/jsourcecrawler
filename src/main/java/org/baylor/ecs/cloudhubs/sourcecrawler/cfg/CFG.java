@@ -473,21 +473,11 @@ public class CFG {
         //in the method
         for(Block node : cfg){
             for (ValueBox use: node.getBody().getUseBoxes()) {
-                var val = use.getValue();
-                if(val instanceof AbstractInstanceFieldRef
-                        || val instanceof Local
-                        || val instanceof StaticFieldRef){
-                    reads.add(use.getValue());
-                }
+                addValueToSet(use, reads);
             }
 
-            for (ValueBox def: node.getBody().getUseAndDefBoxes()) {
-                var val = def.getValue();
-                if(val instanceof AbstractInstanceFieldRef
-                        || val instanceof Local
-                        || val instanceof StaticFieldRef) {
-                    writes.add(def.getValue());
-                }
+            for (ValueBox def: node.getBody().getDefBoxes()) {
+                addValueToSet(def,writes);
             }
 
         }
@@ -502,6 +492,18 @@ public class CFG {
                     this.reqIDs.difference(cfg.writes, this.reqIDs);
                 }
         );
+    }
+
+    private static void addValueToSet(ValueBox use, FlowSet<Value> set) {
+        var val = use.getValue();
+        //filter out all but InstanceFieldRefs, StaticFieldRefs, and Locals
+        //that are not part of a java library
+        if(val instanceof AbstractInstanceFieldRef
+                || val instanceof Local
+                || val instanceof StaticFieldRef
+        && ! val.getType().toQuotedString().contains("java.")){
+            set.add(val);
+        }
     }
 }
 

@@ -44,27 +44,27 @@ public class RequestIDEndpoint {
             cfg.connectCFGs(cfgs);
         });
 
-        //remove cfgs that are called in others
-        //to find the main cfg(s) for the project
+        //remove non-main cfgs (init,clinit, cfgs contained in others)
         List<CFG> topLevelCFGs = new ArrayList<>(List.copyOf(cfgs));
         cfgs.forEach(cfg -> {
-            cfgs.forEach(cfg2 -> {
-                if(cfg.getCallSiteToCFG().containsValue(cfg2)){
-                    topLevelCFGs.remove(cfg2);
-                }
-            });
+            if(! cfg.getMethod().isMain()){
+                topLevelCFGs.remove(cfg);
+            }
         });
 
         //find the request IDs
-        topLevelCFGs.forEach(cfg -> {
-            cfg.requestIDsForCFG();
-        });
+        topLevelCFGs.forEach(CFG::requestIDsForCFG);
 
         //log request IDs
+        StringBuilder builder = new StringBuilder();
         topLevelCFGs.forEach(cfg -> {
-            log.info(cfg.getReqIDs());
+            builder.append(cfg.getMethod().toString())
+                    .append(": ")
+                    .append(cfg.getReqIDs())
+                    .append("\n");
         });
 
-        return ""; // TODO return actual response
+        // return top-level methods with potential IDs
+        return builder.toString();
     }
 }
